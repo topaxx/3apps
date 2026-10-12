@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>3zipper — extract ZIP, RAR, 7z in your browser</title>
+<meta name="description" content="Free WinRAR-like extractor. Open .zip, .rar, .7z, .tar(.gz) files right in your browser — nothing is uploaded.">
+<style>
+:root{--bg:#f7f7f8;--card:#fff;--text:#18181b;--muted:#6b7280;--border:#e5e7eb;--accent:#4f46e5;--accent-text:#fff;--tag:#eef2ff;--tag-text:#3730a3;--hover:#f3f4f6;--err:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#0f0f12;--card:#18181c;--text:#f4f4f5;--muted:#a1a1aa;--border:#2a2a30;--accent:#818cf8;--accent-text:#0f0f12;--tag:#23233a;--tag-text:#c7d2fe;--hover:#222228;--err:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.wrap{max-width:960px;margin:0 auto;padding:2rem 1.25rem}
+header{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap}
+header h1{font-size:2.2rem;margin:0;letter-spacing:-.03em}
+header h1 span{color:var(--accent)}
+header a{color:var(--muted);font-size:.9rem}
+.sub{color:var(--muted);margin:.25rem 0 1.5rem}
+.drop{border:2px dashed var(--border);border-radius:16px;background:var(--card);padding:2.5rem 1rem;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--tag)}
+.drop strong{font-size:1.15rem}
+.drop p{margin:.4rem 0 0;color:var(--muted);font-size:.9rem}
+button,.btn{font:inherit;border:1px solid var(--border);background:var(--card);color:var(--text);padding:.45rem .9rem;border-radius:10px;cursor:pointer;text-decoration:none;display:inline-block}
+button:hover,.btn:hover{background:var(--hover)}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+button:disabled{opacity:.5;cursor:default}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:16px;margin-top:1.25rem;overflow:hidden}
+.bar{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;padding:.75rem 1rem;border-bottom:1px solid var(--border)}
+.bar .name{font-weight:600;margin-right:auto;word-break:break-all}
+.bar .muted{color:var(--muted);font-size:.85rem}
+.tree{max-height:55vh;overflow:auto;font-size:.92rem}
+.row{display:flex;align-items:center;gap:.5rem;padding:.25rem 1rem;border-bottom:1px solid var(--border)}
+.row:hover{background:var(--hover)}
+.row .tw{width:1.1rem;text-align:center;cursor:pointer;color:var(--muted);user-select:none}
+.row .label{flex:1;word-break:break-all}
+.row .size{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.foot{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;padding:.75rem 1rem}
+.foot label{color:var(--muted);font-size:.9rem;margin-right:auto}
+progress{width:100%;height:8px;accent-color:var(--accent)}
+.status{padding:0 1rem .75rem;color:var(--muted);font-size:.9rem;min-height:1.2em}
+.status.err{color:var(--err)}
+dialog{border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--text);padding:1.25rem;max-width:360px;width:90%}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog input{width:100%;font:inherit;padding:.5rem;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);margin:.5rem 0 1rem}
+dialog .actions{display:flex;justify-content:flex-end;gap:.5rem}
+footer{color:var(--muted);font-size:.85rem;margin-top:2rem;text-align:center}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1><span>3</span>zipper</h1><a href="../">← all 3apps</a></header>
+<p class="sub">Extract .zip, .rar, .7z, .tar and .tar.gz files right in your browser. Your files never leave your computer.</p>
+
+<div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose an archive">
+  <strong>Drop an archive here</strong>
+  <p>or click to choose a file · ZIP, RAR, 7z, TAR, TAR.GZ, TGZ, BZ2, XZ</p>
+  <input type="file" id="file" hidden accept=".zip,.rar,.7z,.tar,.gz,.tgz,.bz2,.tbz2,.xz,.txz,.cab,.iso,.cpio,.lzh,.jar,.apk">
+</div>
+
+<section class="panel" id="panel" hidden>
+  <div class="bar">
+    <span class="name" id="aname"></span>
+    <span class="muted" id="ainfo"></span>
+    <button id="selAll">Select all</button>
+    <button id="selNone">Select none</button>
+  </div>
+  <div class="tree" id="tree" role="tree"></div>
+  <div class="foot">
+    <label><input type="checkbox" id="subdir" checked> Put files in a folder named after the archive</label>
+    <button class="primary" id="toFolder">Extract to folder…</button>
+    <button id="asZip">Download as ZIP</button>
+  </div>
+  <div style="padding:0 1rem .5rem"><progress id="prog" value="0" max="1" hidden></progress></div>
+  <div class="status" id="status" aria-live="polite"></div>
+</section>
+
+<footer>Made by Tom · 3apps · powered by libarchive.js (WebAssembly) &amp; JSZip</footer>
+</div>
+
+<dialog id="pwd">
+  <form method="dialog">
+    <strong>Password required</strong>
+    <div class="muted" id="pwdMsg" style="font-size:.9rem;color:var(--muted)">This archive is encrypted.</div>
+    <input type="password" id="pwdInput" autocomplete="off" placeholder="Password">
+    <div class="actions"><button value="cancel">Cancel</button><button class="primary" value="ok" id="pwdOk">OK</button></div>
+  </form>
+</dialog>
+
+<script src="vendor/jszip.min.js"></script>
+<script type="module">
+import { Archive } from "./vendor/libarchive.js";
+Archive.init({ workerUrl: new URL("./vendor/worker-bundle.js", import.meta.url).href });
+
+const $ = id => document.getElementById(id);
+const drop = $("drop"), fileIn = $("file"), panel = $("panel"), tree = $("tree"), statusEl = $("status"), prog = $("prog");
+let current = null; // {file, archive, entries:[{path,size,cf}], root, password}
+const fmt = n => n < 1024 ? n + " B" : n < 1048576 ? (n/1024).toFixed(1) + " KB" : n < 1073741824 ? (n/1048576).toFixed(1) + " MB" : (n/1073741824).toFixed(2) + " GB";
+const setStatus = (t, err) => { statusEl.textContent = t; statusEl.classList.toggle("err", !!err); };
+
+if (!window.showDirectoryPicker) {
+  $("toFolder").title = "Your browser can't write to folders directly (Chrome/Edge only). Use “Download as ZIP”.";
+  $("toFolder").disabled = true;
+  $("asZip").classList.add("primary");
+}
+
+drop.addEventListener("click", () => fileIn.click());
+drop.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); } });
+fileIn.addEventListener("change", () => fileIn.files[0] && openArchive(fileIn.files[0]));
+for (const ev of ["dragenter", "dragover"]) document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); });
+for (const ev of ["dragleave", "drop"]) document.addEventListener(ev, e => { e.preventDefault(); if (ev === "drop" || e.target === drop) drop.classList.remove("over"); });
+document.addEventListener("drop", e => { const f = e.dataTransfer?.files?.[0]; if (f) openArchive(f); });
+
+function askPassword(msg) {
+  return new Promise(res => {
+    const d = $("pwd"); $("pwdMsg").textContent = msg; $("pwdInput").value = "";
+    d.onclose = () => res(d.returnValue === "ok" ? $("pwdInput").value : null);
+    d.returnValue = ""; d.showModal(); $("pwdInput").focus();
+  });
+}
+
+async function openArchive(file) {
+  setStatus("Reading " + file.name + "…"); prog.hidden = true;
+  try {
+    const archive = await Archive.open(file);
+    const list = await archive.getFilesArray();
+    const entries = list.map(({ file: cf, path }) => ({ path: (path || "") + cf.name, size: cf.size || 0, cf }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    let enc = null; try { enc = await archive.hasEncryptedData(); } catch {}
+    current = { file, archive, entries, password: null, encrypted: enc === true };
+    if (current.encrypted) {
+      const p = await askPassword("“" + file.name + "” is password-protected.");
+      if (p === null) { setStatus("Password needed to extract. Open the file again to retry."); }
+      else { current.password = p; await archive.usePassword(p); }
+    }
+    render();
+    const total = entries.reduce((s, e) => s + e.size, 0);
+    $("aname").textContent = file.name;
+    $("ainfo").textContent = entries.length + " files · " + fmt(total) + (current.encrypted ? " · 🔒 encrypted" : "");
+    panel.hidden = false;
+    if (!current.encrypted || current.password !== null) setStatus("Choose files, then extract.");
+  } catch (e) {
+    console.error(e); panel.hidden = true;
+    setStatus("Couldn't open this file: " + (e.message || e) + ". Is it a supported archive?", true);
+  }
+}
+
+// ---- tree ----
+function buildTree(entries) {
+  const root = { name: "", children: new Map(), files: [] };
+  for (const e of entries) {
+    const parts = e.path.split("/").filter(Boolean);
+    let node = root;
+    for (const p of parts.slice(0, -1)) {
+      if (!node.children.has(p)) node.children.set(p, { name: p, children: new Map(), files: [] });
+      node = node.children.get(p);
+    }
+    e.name = parts[parts.length - 1] || e.path;
+    node.files.push(e);
+  }
+  return root;
+}
+const allFiles = n => [...n.files, ...[...n.children.values()].flatMap(allFiles)];
+const dirSize = n => allFiles(n).reduce((s, e) => s + e.size, 0);
+
+function render() {
+  tree.innerHTML = "";
+  const root = buildTree(current.entries);
+  current.entries.forEach(e => e.selected = true);
+  const add = (node, depth, parentEl) => {
+    for (const child of [...node.children.values()].sort((a, b) => a.name.localeCompare(b.name))) {
+      const row = document.createElement("div"); row.className = "row dir"; row.style.paddingLeft = (1 + depth * 1.25) + "rem";
+      const tw = document.createElement("span"); tw.className = "tw"; tw.textContent = "▾";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = true;
+      const label = document.createElement("span"); label.className = "label"; label.textContent = "📁 " + child.name;
+      const size = document.createElement("span"); size.className = "size"; size.textContent = fmt(dirSize(child));
+      row.append(tw, cb, label, size); parentEl.append(row);
+      const box = document.createElement("div"); parentEl.append(box);
+      const files = allFiles(child);
+      cb.addEventListener("change", () => { files.forEach(f => f.selected = cb.checked); sync(); });
+      child.cb = cb; child.files_ = files; current.dirs.push(child);
+      tw.addEventListener("click", () => { box.hidden = !box.hidden; tw.textContent = box.hidden ? "▸" : "▾"; });
+      add(child, depth + 1, box);
+    }
+    for (const f of node.files) {
+      const row = document.createElement("label"); row.className = "row file"; row.style.paddingLeft = (1 + depth * 1.25) + "rem";
+      const tw = document.createElement("span"); tw.className = "tw";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = true; f.cb = cb;
+      cb.addEventListener("change", () => { f.selected = cb.checked; sync(); });
+      const label = document.createElement("span"); label.className = "label"; label.textContent = "📄 " + f.name;
+      const size = document.createElement("span"); size.className = "size"; size.textContent = fmt(f.size);
+      row.append(tw, cb, label, size); parentEl.append(row);
+    }
+  };
+  current.dirs = [];
+  add(root, 0, tree);
+  sync();
+}
+function sync() {
+  for (const f of current.entries) f.cb.checked = f.selected;
+  for (const d of current.dirs) {
+    const n = d.files_.filter(f => f.selected).length;
+    d.cb.checked = n === d.files_.length && n > 0; d.cb.indeterminate = n > 0 && n < d.files_.length;
+  }
+  const sel = current.entries.filter(e => e.selected);
+  $("toFolder").textContent = "Extract " + sel.length + " to folder…";
+  $("asZip").textContent = sel.length === 1 ? "Download file" : "Download " + sel.length + " as ZIP";
+  $("toFolder").disabled = !sel.length || !window.showDirectoryPicker; $("asZip").disabled = !sel.length;
+}
+$("selAll").onclick = () => { current.entries.forEach(e => e.selected = true); sync(); };
+$("selNone").onclick = () => { current.entries.forEach(e => e.selected = false); sync(); };
+
+// ---- extraction ----
+const isPwdError = e => /pass|encrypt|decrypt/i.test(String(e?.message || e));
+async function extractSelected(onFile) {
+  const sel = current.entries.filter(e => e.selected);
+  prog.hidden = false; prog.max = sel.length; prog.value = 0;
+  for (;;) {
+    try {
+      let i = 0;
+      for (const e of sel) {
+        setStatus("Extracting " + e.path + "…");
+        const f = await e.cf.extract();
+        if (!f) throw new Error("Could not extract " + e.path + " (wrong password?)");
+        await onFile(e.path, f);
+        prog.value = ++i;
+      }
+      return sel.length;
+    } catch (err) {
+      if (/not supported/i.test(String(err?.message))) throw new Error("this archive uses encryption the browser engine can't decrypt (e.g. password-protected 7z or RAR). Password-protected ZIP files are supported");
+      if (isPwdError(err) || (current.encrypted && /extract/i.test(String(err.message)))) {
+        const p = await askPassword(current.password === null ? "This archive needs a password." : "Wrong password — try again.");
+        if (p === null) throw new Error("Cancelled");
+        current.password = p;
+        // reopen with the new password so the worker state is clean
+        current.archive = await Archive.open(current.file); await current.archive.usePassword(p);
+        const fresh = await current.archive.getFilesArray();
+        const byPath = new Map(fresh.map(({ file, path }) => [(path || "") + file.name, file]));
+        for (const e of current.entries) e.cf = byPath.get(e.path) || e.cf;
+        prog.value = 0; continue;
+      }
+      throw err;
+    }
+  }
+}
+const baseName = n => n.replace(/\.(tar\.(gz|bz2|xz)|tgz|tbz2|txz|[^.]+)$/i, "") || "extracted";
+const safeParts = p => p.split("/").filter(s => s && s !== "." && s !== "..");
+
+$("toFolder").onclick = async () => {
+  let dir;
+  try { dir = await window.showDirectoryPicker({ id: "3zipper", mode: "readwrite" }); } catch { return; }
+  try {
+    if ($("subdir").checked) dir = await dir.getDirectoryHandle(baseName(current.file.name), { create: true });
+    const n = await extractSelected(async (path, file) => {
+      const parts = safeParts(path); let d = dir;
+      for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
+      const fh = await d.getFileHandle(parts[parts.length - 1], { create: true });
+      const w = await fh.createWritable(); await w.write(file); await w.close();
+    });
+    setStatus("✅ Extracted " + n + " file" + (n === 1 ? "" : "s") + " to “" + dir.name + "”.");
+  } catch (e) { console.error(e); setStatus("Extraction failed: " + (e.message || e), true); }
+};
+
+function download(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+$("asZip").onclick = async () => {
+  try {
+    const sel = current.entries.filter(e => e.selected);
+    if (sel.length === 1) {
+      await extractSelected(async (path, file) => download(file, safeParts(path).pop()));
+      setStatus("✅ Downloaded " + sel[0].name + "."); return;
+    }
+    const zip = new JSZip(); const prefix = $("subdir").checked ? baseName(current.file.name) + "/" : "";
+    const n = await extractSelected(async (path, file) => { zip.file(prefix + safeParts(path).join("/"), file, { date: file.lastModified ? new Date(file.lastModified) : undefined }); });
+    setStatus("Packing ZIP…");
+    const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } }, m => { prog.max = 100; prog.value = m.percent; });
+    download(blob, baseName(current.file.name) + ".zip");
+    setStatus("✅ Downloaded " + n + " files as ZIP. Unpack it with your system (right-click → Extract All / double-click on Mac).");
+  } catch (e) { console.error(e); setStatus("Failed: " + (e.message || e), true); }
+};
+window.__3zipper = { get current() { return current; } }; // for tests
+</script>
+</body>
+</html>
