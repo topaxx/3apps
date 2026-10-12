@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>3apps — Tom's little web apps</title>
+<meta name="description" content="Small, self-made web apps by Tom. Free, run in your browser.">
+<style>
+:root{--bg:#f7f7f8;--card:#fff;--text:#18181b;--muted:#6b7280;--border:#e5e7eb;--accent:#4f46e5;--accent-text:#fff;--tag:#eef2ff;--tag-text:#3730a3}
+@media (prefers-color-scheme:dark){:root{--bg:#0f0f12;--card:#18181c;--text:#f4f4f5;--muted:#a1a1aa;--border:#2a2a30;--accent:#818cf8;--accent-text:#0f0f12;--tag:#23233a;--tag-text:#c7d2fe}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:3rem 1.25rem}
+header h1{font-size:clamp(2rem,5vw,3rem);margin:0;letter-spacing:-.03em}
+header h1 span{color:var(--accent)}
+header p{color:var(--muted);margin:.5rem 0 2.5rem;max-width:40rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1.5rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:transform .15s,box-shadow .15s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.card img{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top left;border-bottom:1px solid var(--border);display:block}
+.body{padding:1.1rem 1.25rem 1.25rem;display:flex;flex-direction:column;gap:.6rem;flex:1}
+.body h2{margin:0;font-size:1.25rem}
+.body p{margin:0;color:var(--muted);font-size:.95rem}
+.tags{display:flex;flex-wrap:wrap;gap:.35rem;margin:0;padding:0;list-style:none}
+.tags li{background:var(--tag);color:var(--tag-text);font-size:.75rem;padding:.15rem .55rem;border-radius:999px}
+.open{margin-top:auto;align-self:flex-start;background:var(--accent);color:var(--accent-text);text-decoration:none;font-weight:600;padding:.5rem 1rem;border-radius:10px}
+.open:hover{filter:brightness(1.1)}
+footer{color:var(--muted);font-size:.85rem;margin-top:3rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1><span>3</span>apps</h1>
+<p>Small, self-made web apps by Tom. Free, no sign-up — they run right in your browser.</p>
+</header>
+<main class="grid" id="projects" aria-label="Projects"></main>
+<footer>Made by Tom · 3apps</footer>
+</div>
+<script>
+// ===== Add new projects here (see README.md) =====
+const PROJECTS = [
+  {
+    name: "3notion",
+    url: "3notion/",
+    image: "assets/3notion.png",
+    description: "A free, offline-friendly Notion-like notes app that runs in your browser. Notes are stored locally in your own browser — nothing is uploaded.",
+    tags: ["Categories sidebar", "Rich text", "Collapsible headings", "Tables", "Images", "Drag to reorder", "Undo/redo", "Export/import backups"]
+  }
+];
+// ==================================================
+const grid = document.getElementById("projects");
+for (const p of PROJECTS) {
+  const card = document.createElement("article");
+  card.className = "card";
+  if (p.image) { const img = document.createElement("img"); img.src = p.image; img.alt = p.name + " screenshot"; img.loading = "lazy"; card.append(img); }
+  const body = document.createElement("div"); body.className = "body";
+  const h = document.createElement("h2"); h.textContent = p.name;
+  const d = document.createElement("p"); d.textContent = p.description;
+  const ul = document.createElement("ul"); ul.className = "tags";
+  for (const t of p.tags || []) { const li = document.createElement("li"); li.textContent = t; ul.append(li); }
+  const a = document.createElement("a"); a.className = "open"; a.href = p.url; a.textContent = "Open app →";
+  body.append(h, d, ul, a); card.append(body); grid.append(card);
+}
+</script>
+</body>
+</html>
