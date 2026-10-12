@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Notities</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3notion</title>
 <style>
 :root{--bg:#fff;--side:#f7f7f5;--text:#37352f;--muted:#9b9a97;--hover:#ebebea;--active:#e3e2e0;--border:#e9e9e7;--accent:#2383e2}
 body.dark{--bg:#191919;--side:#202020;--text:#e6e6e4;--muted:#7f7f7c;--hover:#2c2c2c;--active:#373737;--border:#2f2f2f;--accent:#529cca}
@@ -68,25 +68,25 @@ ul.todo li.done{text-decoration:line-through;color:var(--muted)}ul.todo li.done:
 #empty{color:var(--muted);text-align:center;margin-top:30vh}
 #status{font-size:12px;color:var(--muted);margin-left:8px}
 </style></head><body>
-<aside id="side"><header><span>📝 Notities</span><button id="addCat" title="Nieuwe categorie">＋ Categorie</button></header>
-<div id="banner" hidden></div><button id="newNote" title="Nieuwe notitie (Alt+N)">＋ Nieuwe notitie</button><input id="search" placeholder="Zoeken…"><div id="tree"></div>
-<footer><button id="exp">⬇ Exporteren</button><button id="imp">⬆ Importeren</button><button id="theme">🌙 Donker</button><input type="file" id="file" accept=".json,application/json" hidden></footer></aside>
+<aside id="side"><header><span>📝 3notion</span><button id="addCat" title="New category">＋ Category</button></header>
+<div id="banner" hidden></div><button id="newNote" title="New note (Alt+N)">＋ New note</button><input id="search" placeholder="Search…"><div id="tree"></div>
+<footer><button id="exp">⬇ Export</button><button id="imp">⬆ Import</button><button id="theme">🌙 Dark</button><input type="file" id="file" accept=".json,application/json" hidden></footer></aside>
 <main id="main"><div id="toolbar">
-<button data-c="bold" title="Vet (Ctrl+B)"><b>B</b></button><button data-c="italic" title="Cursief (Ctrl+I)"><i>I</i></button><button data-c="underline" title="Onderstrepen (Ctrl+U)"><u>U</u></button>
-<button data-b="H1" title="Kop 1 (Ctrl+1 of Ctrl+Shift+1)">H1</button><button data-b="H2" title="Kop 2 (Ctrl+2 of Ctrl+Shift+2)">H2</button><button data-b="H3" title="Kop 3 (Ctrl+3 of Ctrl+Shift+3)">H3</button><button data-b="P" title="Normale tekst (Ctrl+0 of Ctrl+Shift+0)">¶</button>
-<button data-c="insertUnorderedList" title="Opsommingslijst (Ctrl+L of Ctrl+Shift+8)">• Lijst</button><button data-c="insertOrderedList" title="Genummerde lijst (Ctrl+Shift+L of Ctrl+Shift+7)">1. Lijst</button>
-<button id="todoBtn" title="Takenlijst (Ctrl+Shift+9)">☑ Taken</button><button id="imgBtn" title="Afbeelding invoegen (of plak/sleep een afbeelding)">🖼 Afbeelding</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Tabel invoegen (3×3)">▦ Tabel</button><button id="linkBtn" title="Link invoegen (Ctrl+K)">🔗 Link</button><span id="status"></span>
-<select id="moveSel" title="Verplaats naar"></select></div>
-<div id="page"><div id="inner"><div id="empty">Selecteer of maak een notitie</div>
-<div id="noteView" hidden><input id="title" placeholder="Zonder titel"><div id="editor" contenteditable="true" data-ph="Begin met typen… (tip: # , ## , - , 1. , [] )"></div></div></div></div></main>
-<div id="imgbar" hidden><button data-w="25">25%</button><button data-w="50">50%</button><button data-w="75">75%</button><button data-w="100">100%</button><button data-del="1" title="Afbeelding verwijderen">🗑</button></div>
-<div id="tblui" hidden><div class="tui" id="tRowH" title="Rij-opties">⋮⋮</div><div class="tui" id="tColH" title="Kolom-opties">⋮⋮</div><div class="tui plus" id="tAddR" title="Rij toevoegen">＋</div><div class="tui plus" id="tAddC" title="Kolom toevoegen">＋</div><div id="tGrips"></div></div><div id="tmenu" hidden></div>
-<div id="modalBg" hidden><div id="modal"><div id="mMsg"></div><input id="mIn"><div class="btns"><button id="mCancel">Annuleren</button><button id="mOk" class="ok">OK</button></div></div></div>
+<button data-c="bold" title="Bold (Ctrl+B)"><b>B</b></button><button data-c="italic" title="Italic (Ctrl+I)"><i>I</i></button><button data-c="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+<button data-b="H1" title="Heading 1 (Ctrl+1 or Ctrl+Shift+1)">H1</button><button data-b="H2" title="Heading 2 (Ctrl+2 or Ctrl+Shift+2)">H2</button><button data-b="H3" title="Heading 3 (Ctrl+3 or Ctrl+Shift+3)">H3</button><button data-b="P" title="Normal text (Ctrl+0 or Ctrl+Shift+0)">¶</button>
+<button data-c="insertUnorderedList" title="Bulleted list (Ctrl+L or Ctrl+Shift+8)">• List</button><button data-c="insertOrderedList" title="Numbered list (Ctrl+Shift+L or Ctrl+Shift+7)">1. List</button>
+<button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
+<select id="moveSel" title="Move to"></select></div>
+<div id="page"><div id="inner"><div id="empty">Select or create a note</div>
+<div id="noteView" hidden><input id="title" placeholder="Untitled"><div id="editor" contenteditable="true" data-ph="Start typing… (tip: # , ## , - , 1. , [] )"></div></div></div></div></main>
+<div id="imgbar" hidden><button data-w="25">25%</button><button data-w="50">50%</button><button data-w="75">75%</button><button data-w="100">100%</button><button data-del="1" title="Delete image">🗑</button></div>
+<div id="tblui" hidden><div class="tui" id="tRowH" title="Row options">⋮⋮</div><div class="tui" id="tColH" title="Column options">⋮⋮</div><div class="tui plus" id="tAddR" title="Add row">＋</div><div class="tui plus" id="tAddC" title="Add column">＋</div><div id="tGrips"></div></div><div id="tmenu" hidden></div>
+<div id="modalBg" hidden><div id="modal"><div id="mMsg"></div><input id="mIn"><div class="btns"><button id="mCancel">Cancel</button><button id="mOk" class="ok">OK</button></div></div></div>
 <script>
 const KEY='notities-app-v1';const $=s=>document.querySelector(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 let mode='mem',idb=null,memMode=false;
-const MSG={mem:'⚠ Opslag geblokkeerd: notities worden niet bewaard na sluiten. Gebruik Exporteren of open het bestand rechtstreeks in je browser.',quota:'⚠ Opslag is vol: de laatste wijzigingen zijn niet bewaard. Exporteer een back-up en verwijder of verklein grote afbeeldingen.'};
+const MSG={mem:'⚠ Storage blocked: notes will not be kept after closing. Use Export, or open the file directly in your browser.',quota:'⚠ Storage is full: your latest changes were not saved. Export a backup and delete or shrink large images.'};
 function setBanner(k){const b=document.getElementById('banner');b.hidden=!k;if(k)b.textContent=MSG[k]}
 function lsGet(){try{return localStorage.getItem(KEY)}catch(e){return null}}
 function idbOpen(){return new Promise((res,rej)=>{let r;try{r=indexedDB.open('notities-app',1)}catch(e){return rej(e)}r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);r.onblocked=()=>rej(new Error('blocked'))})}
@@ -101,8 +101,8 @@ function flush(){if(!dirty)return;dirty=false;const v=JSON.stringify(D);
  if(mode==='idb')idbReq('put',v,KEY).then(()=>{if(!memMode)setBanner(null)}).catch(e=>{setBanner('quota')});
  else if(mode==='ls'){try{localStorage.setItem(KEY,v);setBanner(null)}catch(e){setBanner(/quota/i.test(e.name+e.message)?'quota':'mem')}}}
 function lsSet(){dirty=true;flush()}
-let D={cats:[{id:uid(),name:'Algemeen',collapsed:false}],notes:[],current:null,dark:false};
-function save(){dirty=true;clearTimeout(save.p);save.p=setTimeout(flush,300);$('#status').textContent='Opgeslagen';clearTimeout(save.t);save.t=setTimeout(()=>$('#status').textContent='',1200)}
+let D={cats:[{id:uid(),name:'General',collapsed:false}],notes:[],current:null,dark:false};
+function save(){dirty=true;clearTimeout(save.p);save.p=setTimeout(flush,300);$('#status').textContent='Saved';clearTimeout(save.t);save.t=setTimeout(()=>$('#status').textContent='',1200)}
 const cur=()=>D.notes.find(n=>n.id===D.current);
 function ask(msg,o={}){return new Promise(res=>{const bg=$('#modalBg'),inp=$('#mIn'),ok=$('#mOk');$('#mMsg').textContent=msg;inp.hidden=!o.input;inp.value=o.def||'';ok.textContent=o.ok||'OK';ok.classList.toggle('danger',!!o.danger);bg.hidden=false;(o.input?inp:ok).focus();
  const done=v=>{bg.hidden=true;ok.onclick=$('#mCancel').onclick=inp.onkeydown=bg.onkeydown=null;res(v)};
@@ -121,40 +121,40 @@ function restoreSide(sn){const n0=cur();if(n0&&document.activeElement===ed){n0.h
  D.cats=sn.cats.map(c=>({...c}));D.notes=sn.notes.map(x=>{x.ref.cat=x.cat;x.ref.title=x.title;return x.ref});
  D.current=D.notes.some(n=>n.id===sn.current)?sn.current:(cur()?D.current:null);if(document.activeElement===ed)ed.blur();save();render();open()}
 function toast(msg){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t)}t.textContent=msg;t.className='show';clearTimeout(toast.t);toast.t=setTimeout(()=>t.className='',2200)}
-function sideUndo(){const a=SH.past.pop();if(!a){toast('Niets om ongedaan te maken');return}SH.future.push({snap:snapSide(),label:a.label});restoreSide(a.snap);toast('Ongedaan gemaakt: '+a.label)}
-function sideRedo(){const a=SH.future.pop();if(!a){toast('Niets om opnieuw te doen');return}SH.past.push({snap:snapSide(),label:a.label});restoreSide(a.snap);toast('Opnieuw: '+a.label)}
+function sideUndo(){const a=SH.past.pop();if(!a){toast('Nothing to undo');return}SH.future.push({snap:snapSide(),label:a.label});restoreSide(a.snap);toast('Undone: '+a.label)}
+function sideRedo(){const a=SH.future.pop();if(!a){toast('Nothing to redo');return}SH.past.push({snap:snapSide(),label:a.label});restoreSide(a.snap);toast('Redone: '+a.label)}
 let drag=null;function clearDrop(){document.querySelectorAll('.dBefore,.dAfter,.drop').forEach(x=>x.classList.remove('dBefore','dAfter','drop'))}
 let pend=null,editingNote=null;function render(){const q=$('#search').value.toLowerCase().trim(),t=$('#tree');t.innerHTML='';
  D.cats.forEach(c=>{const ns=D.notes.filter(n=>n.cat===c.id&&(!q||(n.title+' '+n.html.replace(/<[^>]+>/g,' ')).toLowerCase().includes(q)));
   if(q&&!ns.length)return;const el=document.createElement('div');el.className='cat'+(c.collapsed&&!q?' collapsed':'');
-  el.innerHTML=`<div class="cathead"><span class="arrow">▾</span><span class="nm">${esc(c.name)}</span><span class="acts"><button data-a="addn" title="Nieuwe notitie">＋</button><button data-a="ren" title="Hernoemen">✎</button><button data-a="del" title="Verwijderen">🗑</button></span></div><div class="notes"></div>`;
+  el.innerHTML=`<div class="cathead"><span class="arrow">▾</span><span class="nm">${esc(c.name)}</span><span class="acts"><button data-a="addn" title="New note">＋</button><button data-a="ren" title="Rename">✎</button><button data-a="del" title="Delete">🗑</button></span></div><div class="notes"></div>`;
   const h=el.firstChild;h.querySelector('.arrow').onclick=h.querySelector('.nm').onclick=()=>{c.collapsed=!c.collapsed;save();render()};
   h.querySelector('[data-a=addn]').onclick=()=>newNote(c.id);
-  const renC=()=>inline(h.querySelector('.nm'),c.name,v=>{if(v&&v!==c.name){if(freshCat!==c.id)sideAct('categorie hernoemd');c.name=v}freshCat=null;save();render()});h.querySelector('[data-a=ren]').onclick=renC;h.querySelector('.nm').ondblclick=renC;if(editing===c.id)pend=renC;
-  h.querySelector('[data-a=del]').onclick=()=>{const k=D.notes.filter(n=>n.cat===c.id).length;ask(`Categorie "${c.name}" verwijderen${k?` inclusief ${k} notitie(s)`:''}?`,{ok:'Verwijderen',danger:true}).then(y=>{if(y){sideAct('categorie verwijderd');D.notes=D.notes.filter(n=>n.cat!==c.id);D.cats=D.cats.filter(x=>x!==c);if(!cur())D.current=null;save();render();open()}})};
+  const renC=()=>inline(h.querySelector('.nm'),c.name,v=>{if(v&&v!==c.name){if(freshCat!==c.id)sideAct('category renamed');c.name=v}freshCat=null;save();render()});h.querySelector('[data-a=ren]').onclick=renC;h.querySelector('.nm').ondblclick=renC;if(editing===c.id)pend=renC;
+  h.querySelector('[data-a=del]').onclick=()=>{const k=D.notes.filter(n=>n.cat===c.id).length;ask(`Delete category "${c.name}"${k?` including ${k} note(s)`:''}?`,{ok:'Delete',danger:true}).then(y=>{if(y){sideAct('category deleted');D.notes=D.notes.filter(n=>n.cat!==c.id);D.cats=D.cats.filter(x=>x!==c);if(!cur())D.current=null;save();render();open()}})};
   h.draggable=!q;h.ondragstart=e=>{if(e.target.closest('input')){e.preventDefault();return}drag={t:'cat',id:c.id};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','cat:'+c.id)};h.ondragend=clearDrop;
   h.ondragover=e=>{if(!drag)return;e.preventDefault();clearDrop();if(drag.t==='note')h.classList.add('drop');else if(drag.id!==c.id){const rc=h.getBoundingClientRect();el.classList.add(e.clientY<rc.top+rc.height/2?'dBefore':'dAfter')}};
   h.ondragleave=()=>{h.classList.remove('drop');el.classList.remove('dBefore','dAfter')};
   h.ondrop=e=>{e.preventDefault();const d=drag;const after=el.classList.contains('dAfter');clearDrop();drag=null;if(!d)return;
-   if(d.t==='note'){const n=D.notes.find(x=>x.id===d.id);if(n){sideAct('notitie verplaatst');D.notes.splice(D.notes.indexOf(n),1);n.cat=c.id;D.notes.push(n);c.collapsed=false}}
-   else if(d.id!==c.id){sideAct('categorie verplaatst');const mv=D.cats.find(x=>x.id===d.id);D.cats.splice(D.cats.indexOf(mv),1);D.cats.splice(D.cats.indexOf(c)+(after?1:0),0,mv)}save();render();open()};
+   if(d.t==='note'){const n=D.notes.find(x=>x.id===d.id);if(n){sideAct('note moved');D.notes.splice(D.notes.indexOf(n),1);n.cat=c.id;D.notes.push(n);c.collapsed=false}}
+   else if(d.id!==c.id){sideAct('category moved');const mv=D.cats.find(x=>x.id===d.id);D.cats.splice(D.cats.indexOf(mv),1);D.cats.splice(D.cats.indexOf(c)+(after?1:0),0,mv)}save();render();open()};
   ns.forEach(n=>{const ne=document.createElement('div');ne.className='note'+(n.id===D.current?' active':'');ne.draggable=true;
-   ne.innerHTML=`<span class="nm">📄 ${esc(n.title||'Zonder titel')}</span><span class="acts"><button data-a="ren" title="Hernoemen">✎</button><button data-a="del" title="Verwijderen">🗑</button></span>`;
+   ne.innerHTML=`<span class="nm">📄 ${esc(n.title||'Untitled')}</span><span class="acts"><button data-a="ren" title="Rename">✎</button><button data-a="del" title="Delete">🗑</button></span>`;
    ne.onclick=e=>{if(e.target.closest('button'))return;D.current=n.id;save();render();open()};
    ne.ondragstart=e=>{e.stopPropagation();drag={t:'note',id:n.id};e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','note:'+n.id)};ne.ondragend=clearDrop;
    ne.ondragover=e=>{if(!drag||drag.t!=='note'||drag.id===n.id)return;e.preventDefault();e.stopPropagation();clearDrop();const rc=ne.getBoundingClientRect();ne.classList.add(e.clientY<rc.top+rc.height/2?'dBefore':'dAfter')};
    ne.ondragleave=()=>ne.classList.remove('dBefore','dAfter');
    ne.ondrop=e=>{e.preventDefault();e.stopPropagation();const after=ne.classList.contains('dAfter');clearDrop();const d=drag;drag=null;if(!d||d.t!=='note'||d.id===n.id)return;
-    const mv=D.notes.find(x=>x.id===d.id);if(!mv)return;sideAct('notitie verplaatst');D.notes.splice(D.notes.indexOf(mv),1);mv.cat=n.cat;D.notes.splice(D.notes.indexOf(n)+(after?1:0),0,mv);save();render();open()};
-   ne.querySelector('[data-a=ren]').onclick=()=>inline(ne.querySelector('.nm'),n.title,v=>{if(v!==null&&v!==n.title){sideAct('notitie hernoemd');n.title=v}save();render();open()});if(editingNote===n.id){editingNote=null;pend=()=>inline(ne.querySelector('.nm'),n.title,v=>{if(v)n.title=v;n.updated=Date.now();save();render();open();ed.focus()})}
-   ne.querySelector('[data-a=del]').onclick=()=>{ask(`Notitie "${n.title||'Zonder titel'}" verwijderen?`,{ok:'Verwijderen',danger:true}).then(y=>{if(y){sideAct('notitie verwijderd');D.notes=D.notes.filter(x=>x!==n);if(D.current===n.id)D.current=null;save();render();open()}})};
+    const mv=D.notes.find(x=>x.id===d.id);if(!mv)return;sideAct('note moved');D.notes.splice(D.notes.indexOf(mv),1);mv.cat=n.cat;D.notes.splice(D.notes.indexOf(n)+(after?1:0),0,mv);save();render();open()};
+   ne.querySelector('[data-a=ren]').onclick=()=>inline(ne.querySelector('.nm'),n.title,v=>{if(v!==null&&v!==n.title){sideAct('note renamed');n.title=v}save();render();open()});if(editingNote===n.id){editingNote=null;pend=()=>inline(ne.querySelector('.nm'),n.title,v=>{if(v)n.title=v;n.updated=Date.now();save();render();open();ed.focus()})}
+   ne.querySelector('[data-a=del]').onclick=()=>{ask(`Delete note "${n.title||'Untitled'}"?`,{ok:'Delete',danger:true}).then(y=>{if(y){sideAct('note deleted');D.notes=D.notes.filter(x=>x!==n);if(D.current===n.id)D.current=null;save();render();open()}})};
    el.querySelector('.notes').appendChild(ne)});t.appendChild(el)});if(pend){const f=pend;pend=null;f()}
- const s=$('#moveSel');s.innerHTML='<option value="">Verplaats naar…</option>'+D.cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');}
+ const s=$('#moveSel');s.innerHTML='<option value="">Move to…</option>'+D.cats.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');}
 function open(){const n=cur();$('#empty').hidden=!!n;$('#noteView').hidden=!n;$('#toolbar').style.visibility=n?'visible':'hidden';
  if(n){if($('#title').value!==n.title||document.activeElement!==$('#title'))$('#title').value=n.title;if(document.activeElement!==$('#editor')){$('#editor').innerHTML=n.html;ed.querySelectorAll('table').forEach(normTable);recompute();hideTbl()}}}
-function newNote(cid){if(!cid||!D.cats.some(c=>c.id===cid)){if(!D.cats.length)D.cats.push({id:uid(),name:'Algemeen',collapsed:false});cid=(cur()&&cur().cat)||D.cats[0].id}
- const n={id:uid(),cat:cid,title:'Nieuwe notitie',html:'',updated:Date.now()};sideAct('notitie aangemaakt');D.notes.push(n);D.current=n.id;D.cats.find(c=>c.id===cid).collapsed=false;editingNote=n.id;save();open();render()}
-$('#addCat').onclick=()=>{sideAct('categorie aangemaakt');const c={id:uid(),name:'Nieuwe categorie',collapsed:false};freshCat=c.id;D.cats.push(c);editing=c.id;$('#search').value='';save();render()};
+function newNote(cid){if(!cid||!D.cats.some(c=>c.id===cid)){if(!D.cats.length)D.cats.push({id:uid(),name:'General',collapsed:false});cid=(cur()&&cur().cat)||D.cats[0].id}
+ const n={id:uid(),cat:cid,title:'New note',html:'',updated:Date.now()};sideAct('note created');D.notes.push(n);D.current=n.id;D.cats.find(c=>c.id===cid).collapsed=false;editingNote=n.id;save();open();render()}
+$('#addCat').onclick=()=>{sideAct('category created');const c={id:uid(),name:'New category',collapsed:false};freshCat=c.id;D.cats.push(c);editing=c.id;$('#search').value='';save();render()};
 $('#newNote').onclick=()=>{$('#search').value='';newNote(cur()&&cur().cat)};
 $('#title').oninput=e=>{const n=cur();if(n){n.title=e.target.value;n.updated=Date.now();save();render()}};
 $('#title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#editor').focus()}};
@@ -165,7 +165,7 @@ function setBlock(t){const sl=getSelection();const b=sl.rangeCount&&ed.contains(
 document.querySelectorAll('#toolbar [data-b]').forEach(b=>b.onmousedown=e=>{e.preventDefault();setBlock(b.dataset.b)});
 function todo(){document.execCommand('insertUnorderedList');const s=getSelection();let n=s.anchorNode;while(n&&n!==ed&&n.nodeName!=='UL')n=n.parentNode;if(n&&n.nodeName==='UL')n.classList.add('todo');ed.oninput()}
 $('#todoBtn').onmousedown=e=>{e.preventDefault();todo();updateActive()};
-$('#linkBtn').onmousedown=e=>{e.preventDefault();doLink()};function doLink(){const sel=getSelection(),rg=sel.rangeCount?sel.getRangeAt(0).cloneRange():null;ask('Link-adres (URL):',{input:true,def:'https://'}).then(u=>{ed.focus();if(rg){sel.removeAllRanges();sel.addRange(rg)}if(u&&u!=='https://'){if(rg&&rg.collapsed)document.execCommand('insertHTML',false,'<a href="'+esc(u)+'">'+esc(u)+'</a>');else document.execCommand('createLink',false,u)}ed.oninput();updateActive()})}
+$('#linkBtn').onmousedown=e=>{e.preventDefault();doLink()};function doLink(){const sel=getSelection(),rg=sel.rangeCount?sel.getRangeAt(0).cloneRange():null;ask('Link address (URL):',{input:true,def:'https://'}).then(u=>{ed.focus();if(rg){sel.removeAllRanges();sel.addRange(rg)}if(u&&u!=='https://'){if(rg&&rg.collapsed)document.execCommand('insertHTML',false,'<a href="'+esc(u)+'">'+esc(u)+'</a>');else document.execCommand('createLink',false,u)}ed.oninput();updateActive()})}
 ed.onclick=e=>{const a=e.target.closest('a');if(a&&(e.ctrlKey||e.metaKey)){window.open(a.href,'_blank');return}
  const li=e.target.closest('ul.todo li');if(li&&e.offsetX<22){li.classList.toggle('done');ed.oninput()}};
 ed.onkeydown=e=>{if(e.key!==' ')return;const s=getSelection();if(!s.rangeCount)return;const nd=s.anchorNode;if(nd.nodeType!==3)return;
@@ -173,13 +173,13 @@ ed.onkeydown=e=>{if(e.key!==' ')return;const s=getSelection();if(!s.rangeCount)r
  if(!m)return;let blk=nd.parentNode;if(blk!==ed&&!/^(DIV|P)$/.test(blk.nodeName))return;if(nd.previousSibling)return;
  e.preventDefault();const r=document.createRange();r.setStart(nd,0);r.setEnd(nd,s.anchorOffset);s.removeAllRanges();s.addRange(r);document.execCommand('delete');
  if(m[0]==='todo')todo();else document.execCommand(m[0],false,m[1]);ed.oninput()};
-$('#moveSel').onchange=e=>{const n=cur();if(n&&e.target.value&&e.target.value!==n.cat){sideAct('notitie verplaatst');n.cat=e.target.value;save();render()}e.target.value=''};
+$('#moveSel').onchange=e=>{const n=cur();if(n&&e.target.value&&e.target.value!==n.cat){sideAct('note moved');n.cat=e.target.value;save();render()}e.target.value=''};
 $('#search').oninput=render;
-$('#exp').onclick=()=>{const b=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='notities-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
+$('#exp').onclick=()=>{const b=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='3notion-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
 $('#imp').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.cats)||!Array.isArray(d.notes))throw 0;
- ask('Huidige gegevens vervangen door de import?',{ok:'Vervangen',danger:true}).then(y=>{if(y){D=d;save();flush();applyTheme();render();open()}})}catch(_){ask('Ongeldig back-upbestand.')}e.target.value=''})};
-function applyTheme(){document.body.classList.toggle('dark',!!D.dark);$('#theme').textContent=D.dark?'☀ Licht':'🌙 Donker'}
+ ask('Replace current data with the import?',{ok:'Replace',danger:true}).then(y=>{if(y){D=d;save();flush();applyTheme();render();open()}})}catch(_){ask('Invalid backup file.')}e.target.value=''})};
+function applyTheme(){document.body.classList.toggle('dark',!!D.dark);$('#theme').textContent=D.dark?'☀ Light':'🌙 Dark'}
 $('#theme').onclick=()=>{D.dark=!D.dark;save();applyTheme()};
 window.addEventListener('keydown',e=>{if(e.code==='KeyN'&&((e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey)||((e.ctrlKey||e.metaKey)&&e.altKey))){e.stopPropagation();e.preventDefault();newNote(cur()?.cat)}},true);
 document.execCommand('defaultParagraphSeparator',false,'p');
@@ -326,12 +326,12 @@ function tblOp(op,ctx){const {t}=ctx;let r=ctx.r,c=ctx.c;const res=/^col/.test(o
  if(res==='gone'){hideTbl();recompute();ed.oninput();return}
  if(res[0]!=null)r=res[0];if(res[1]!=null)c=res[1];normTable(t);r=Math.min(r,t.rows.length-1);c=Math.min(c,t.rows[0].cells.length-1);
  ed.focus();caretTo(cellAt(t,r,c),true);hoverCell=null;$('#tGrips').dataset.k='';recompute();ed.oninput();showTbl(true)}
-const MENU=[['rowIns:0','Rij boven invoegen'],['rowIns:1','Rij onder invoegen'],['colIns:0','Kolom links invoegen'],['colIns:1','Kolom rechts invoegen'],'-',
- ['rowDup','Rij dupliceren'],['colDup','Kolom dupliceren'],['rowClr','Rij leegmaken'],['colClr','Kolom leegmaken'],'-',
- ['hRow','Kopregel aan/uit'],['hCol','Kopkolom aan/uit'],'-',['rowUp','Rij omhoog'],['rowDown','Rij omlaag'],['colL','Kolom naar links'],['colR','Kolom naar rechts'],'-',
- ['rowDel','Rij verwijderen','danger'],['colDel','Kolom verwijderen','danger'],['tblDel','Tabel verwijderen','danger']];
+const MENU=[['rowIns:0','Insert row above'],['rowIns:1','Insert row below'],['colIns:0','Insert column left'],['colIns:1','Insert column right'],'-',
+ ['rowDup','Duplicate row'],['colDup','Duplicate column'],['rowClr','Clear row'],['colClr','Clear column'],'-',
+ ['hRow','Toggle header row'],['hCol','Toggle header column'],'-',['rowUp','Move row up'],['rowDown','Move row down'],['colL','Move column left'],['colR','Move column right'],'-',
+ ['rowDel','Delete row','danger'],['colDel','Delete column','danger'],['tblDel','Delete table','danger']];
 function openTMenu(btn,kind){if(!TA)return;const ctx={t:TA.t,r:TA.r,c:TA.c},m=$('#tmenu');
- m.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:3px 10px">${kind==='row'?'Rij '+(ctx.r+1):'Kolom '+(ctx.c+1)}</div>`+MENU.map(x=>x==='-'?'<hr>':`<button data-op="${x[0]}" class="${x[2]||''}">${x[1]}</button>`).join('');
+ m.innerHTML=`<div style="font-size:11px;color:var(--muted);padding:3px 10px">${kind==='row'?'Row '+(ctx.r+1):'Column '+(ctx.c+1)}</div>`+MENU.map(x=>x==='-'?'<hr>':`<button data-op="${x[0]}" class="${x[2]||''}">${x[1]}</button>`).join('');
  cellAt(ctx.t,ctx.r,ctx.c);ed.querySelectorAll('.tsel').forEach(x=>x.classList.remove('tsel'));
  (kind==='row'?[...ctx.t.rows[ctx.r].cells]:[...ctx.t.rows].map(rw=>rw.cells[ctx.c])).forEach(x=>x.classList.add('tsel'));
  m.hidden=false;const b=btn.getBoundingClientRect();m.style.left=Math.min(innerWidth-230,b.right+4)+'px';m.style.top=Math.max(4,Math.min(innerHeight-m.offsetHeight-4,b.top))+'px';
