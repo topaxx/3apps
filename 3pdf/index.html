@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>3pdf — sign PDFs with your signature image</title>
+<meta name="description" content="Free, private PDF signer. Add your signature image to any PDF right in your browser — nothing is uploaded.">
+<style>
+:root{--bg:#f7f7f8;--card:#fff;--text:#18181b;--muted:#6b7280;--border:#e5e7eb;--accent:#4f46e5;--accent-text:#fff;--tag:#eef2ff;--tag-text:#3730a3;--hover:#f3f4f6;--err:#b91c1c;--desk:#e9e9ee}
+@media (prefers-color-scheme:dark){:root{--bg:#0f0f12;--card:#18181c;--text:#f4f4f5;--muted:#a1a1aa;--border:#2a2a30;--accent:#818cf8;--accent-text:#0f0f12;--tag:#23233a;--tag-text:#c7d2fe;--hover:#222228;--err:#f87171;--desk:#09090b}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.45;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--card)}
+header h1{font-size:1.5rem;margin:0;letter-spacing:-.03em}
+header h1 span{color:var(--accent)}
+header .back{color:var(--muted);font-size:.85rem}
+header .sp{flex:1}
+button,.btn{font:inherit;font-size:.9rem;border:1px solid var(--border);background:var(--card);color:var(--text);padding:.4rem .8rem;border-radius:10px;cursor:pointer}
+button:hover{background:var(--hover)}
+button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent);font-weight:600}
+button.primary:hover{filter:brightness(1.1)}
+button:disabled{opacity:.5;cursor:default}
+button.on{outline:2px solid var(--accent);outline-offset:1px}
+.zoom{display:flex;align-items:center;gap:.25rem;color:var(--muted);font-size:.85rem}
+.zoom span{min-width:3.2rem;text-align:center}
+main{flex:1;display:flex;min-height:0}
+aside{width:270px;flex-shrink:0;border-right:1px solid var(--border);background:var(--card);padding:1rem;overflow:auto;display:flex;flex-direction:column;gap:.9rem}
+aside h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0}
+aside label.opt{font-size:.85rem;color:var(--muted);display:flex;gap:.4rem;align-items:center}
+.hint{font-size:.82rem;color:var(--muted);margin:0}
+.sigs{display:flex;flex-direction:column;gap:.5rem}
+.sig{border:1px solid var(--border);border-radius:12px;padding:.4rem;cursor:pointer;background:var(--bg)}
+.sig.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.sig .th{height:64px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(#0000 0 25%,#8881 0 50%) 0 0/14px 14px;border-radius:8px}
+.sig .th img{max-height:60px;max-width:100%}
+@media (prefers-color-scheme:dark){.sig .th{background-color:#e5e5e5}}
+.sig .meta{display:flex;align-items:center;gap:.25rem;margin-top:.3rem}
+.sig .meta input{flex:1;min-width:0;font:inherit;font-size:.85rem;border:1px solid transparent;background:transparent;color:var(--text);border-radius:6px;padding:.1rem .3rem}
+.sig .meta input:focus,.sig .meta input:hover{border-color:var(--border)}
+.sig .meta button{padding:.1rem .45rem;font-size:.8rem}
+.confirm{font-size:.82rem;display:flex;gap:.3rem;align-items:center;margin-top:.3rem;color:var(--err)}
+.confirm button{padding:.1rem .5rem;font-size:.8rem}
+#desk{flex:1;overflow:auto;background:var(--desk);position:relative}
+#pages{display:flex;flex-direction:column;align-items:center;gap:1.25rem;padding:1.5rem 1rem 4rem}
+.pg{position:relative;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.18);flex-shrink:0}
+.pg canvas{display:block;width:100%;height:100%}
+.pg.arm{cursor:crosshair}
+.pgbar{position:absolute;top:-1.15rem;left:0;right:0;display:flex;gap:.25rem;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+.pgbar .acts{display:flex;gap:.2rem}
+.pgbar button{padding:0 .4rem;font-size:.72rem;border-radius:6px;line-height:1.4}
+.pl{position:absolute;outline:1px dashed transparent;touch-action:none;cursor:move;user-select:none}
+.pl:hover,.pl.sel{outline-color:var(--accent)}
+.pl img{width:100%;height:100%;display:block;pointer-events:none}
+.pl .txt{white-space:pre;color:#111;font-family:Helvetica,Arial,sans-serif;line-height:1;pointer-events:none}
+.pl .h{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid #fff;cursor:nwse-resize;display:none}
+.pl .x{position:absolute;right:-10px;top:-10px;width:20px;height:20px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:12px;line-height:14px;text-align:center;cursor:pointer;display:none;padding:0}
+.pl.sel .h,.pl.sel .x,.pl:hover .h,.pl:hover .x{display:block}
+.empty{position:absolute;inset:1.5rem;border:2px dashed var(--border);border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--muted);cursor:pointer;background:var(--card)}
+.empty strong{color:var(--text);font-size:1.2rem}
+.empty.over,#desk.over .empty{border-color:var(--accent)}
+.toast{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:.5rem 1rem;border-radius:10px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:1}
+.row{display:flex;gap:.4rem;flex-wrap:wrap}
+input[type=text].tx{font:inherit;font-size:.85rem;flex:1;min-width:0;border:1px solid var(--border);border-radius:8px;padding:.3rem .5rem;background:var(--bg);color:var(--text)}
+@media (max-width:700px){main{flex-direction:column}aside{width:auto;border-right:0;border-bottom:1px solid var(--border);max-height:40vh}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>3</span>pdf</h1><a class="back" href="../">← all 3apps</a>
+  <button id="openBtn">Open PDF…</button>
+  <button id="addBtn" disabled title="Append pages from another PDF">Add PDF pages…</button>
+  <div class="zoom"><button id="zOut" aria-label="Zoom out">−</button><span id="zVal">100%</span><button id="zIn" aria-label="Zoom in">+</button><button id="zFit">Fit width</button></div>
+  <span class="sp"></span>
+  <button class="primary" id="saveBtn" disabled>Download signed PDF</button>
+  <input type="file" id="pdfIn" accept="application/pdf,.pdf" hidden>
+  <input type="file" id="addIn" accept="application/pdf,.pdf" hidden>
+</header>
+<main>
+<aside>
+  <h2>Signatures</h2>
+  <button id="sigUp">+ Upload signature image…</button>
+  <input type="file" id="sigIn" accept="image/png,image/jpeg,image/webp" hidden multiple>
+  <label class="opt"><input type="checkbox" id="rmWhite" checked> Remove white background</label>
+  <label class="opt"><input type="checkbox" id="crop" checked> Crop to signature</label>
+  <div class="sigs" id="sigs"></div>
+  <p class="hint" id="sigHint">Upload a photo or scan of your signature (PNG/JPG). It is saved in this browser for next time.</p>
+  <h2>Text (optional)</h2>
+  <div class="row"><input type="text" class="tx" id="txVal" placeholder="e.g. your name or date"><button id="txBtn">Add text</button></div>
+  <p class="hint">Click a signature (or “Add text”), then click on a page to place it. Drag to move, use the corner dot to resize, × to remove.</p>
+  <p class="hint">🔒 Everything stays on your device. Nothing is uploaded.</p>
+</aside>
+<div id="desk">
+  <div class="empty" id="empty"><strong>Drop a PDF here</strong><span>or click to choose a file</span></div>
+  <div id="pages"></div>
+</div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="vendor/pdf-lib.min.js"></script>
+<script type="module">
+import * as pdfjs from "./vendor/pdf.min.mjs";
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("./vendor/pdf.worker.min.mjs", import.meta.url).href;
+const $ = id => document.getElementById(id);
+const toast = (t, ms = 2500) => { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove("show"), ms); };
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+// ===== IndexedDB signature store =====
+const db = await new Promise((res, rej) => { const r = indexedDB.open("3pdf", 1); r.onupgradeneeded = () => r.result.createObjectStore("sigs", { keyPath: "id" }); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const tx = (mode, fn) => new Promise((res, rej) => { const t = db.transaction("sigs", mode); const out = fn(t.objectStore("sigs")); t.oncomplete = () => res(out?.result); t.onerror = () => rej(t.error); });
+const dbAll = () => tx("readonly", s => s.getAll());
+const dbPut = v => tx("readwrite", s => s.put(v));
+const dbDel = id => tx("readwrite", s => s.delete(id));
+
+let sigs = [];          // {id,name,blob,w,h,created,url}
+let armed = null;       // {type:'sig', sig} | {type:'text', text}
+let selectedPl = null;
+
+async function loadSigs() {
+  for (const s of sigs) URL.revokeObjectURL(s.url);
+  sigs = (await dbAll()).sort((a, b) => a.created - b.created).map(s => ({ ...s, url: URL.createObjectURL(s.blob) }));
+  renderSigs();
+}
+function renderSigs() {
+  const box = $("sigs"); box.innerHTML = "";
+  for (const s of sigs) {
+    const el = document.createElement("div"); el.className = "sig" + (armed?.sig?.id === s.id ? " sel" : ""); el.dataset.id = s.id; el.draggable = true;
+    el.innerHTML = `<div class="th"><img alt=""></div><div class="meta"><input aria-label="Signature name"><button class="del" title="Delete signature" aria-label="Delete signature">✕</button></div>`;
+    el.querySelector("img").src = s.url;
+    const name = el.querySelector("input"); name.value = s.name;
+    name.addEventListener("click", e => e.stopPropagation());
+    name.addEventListener("change", async () => { s.name = name.value.trim() || "Signature"; await dbPut(strip(s)); toast("Renamed"); });
+    name.addEventListener("keydown", e => { if (e.key === "Enter") name.blur(); });
+    el.querySelector(".del").addEventListener("click", e => {
+      e.stopPropagation(); if (el.querySelector(".confirm")) return;
+      const c = document.createElement("div"); c.className = "confirm";
+      c.innerHTML = `Delete “<b></b>”? <button class="yes">Delete</button><button class="no">Cancel</button>`;
+      c.querySelector("b").textContent = s.name;
+      c.querySelector(".yes").onclick = async ev => { ev.stopPropagation(); await dbDel(s.id); if (armed?.sig?.id === s.id) disarm(); await loadSigs(); toast("Signature deleted"); };
+      c.querySelector(".no").onclick = ev => { ev.stopPropagation(); c.remove(); };
+      c.addEventListener("click", ev => ev.stopPropagation());
+      el.append(c);
+    });
+    el.addEventListener("click", () => { if (armed?.sig?.id === s.id) disarm(); else arm({ type: "sig", sig: s }); });
+    el.addEventListener("dragstart", e => { e.dataTransfer.setData("application/x-3pdf-sig", s.id); e.dataTransfer.effectAllowed = "copy"; });
+    box.append(el);
+  }
+  $("sigHint").hidden = sigs.length > 0;
+}
+const strip = s => ({ id: s.id, name: s.name, blob: s.blob, w: s.w, h: s.h, created: s.created });
+
+function arm(a) {
+  armed = a; renderSigs(); $("txBtn").classList.toggle("on", a?.type === "text");
+  document.querySelectorAll(".pg").forEach(p => p.classList.toggle("arm", !!a));
+  if (a) toast(pages.length ? "Click on a page to place it" : "Open a PDF first, then click on a page");
+}
+function disarm() { armed = null; renderSigs(); $("txBtn").classList.remove("on"); document.querySelectorAll(".pg").forEach(p => p.classList.remove("arm")); }
+
+// ===== signature processing =====
+async function processImage(file, removeWhite, crop) {
+  const bmp = await createImageBitmap(file);
+  const max = 2000, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const W = Math.round(bmp.width * k), H = Math.round(bmp.height * k);
+  const c = new OffscreenCanvas(W, H), g = c.getContext("2d"); g.drawImage(bmp, 0, 0, W, H);
+  const im = g.getImageData(0, 0, W, H), d = im.data;
+  if (removeWhite) {
+    // near-white -> transparent with a soft ramp to avoid jaggies
+    const lo = 180, hi = 235;
+    for (let i = 0; i < d.length; i += 4) {
+      const l = Math.min(d[i], d[i + 1], d[i + 2]);
+      if (l >= hi) d[i + 3] = 0;
+      else if (l > lo) d[i + 3] = Math.round(d[i + 3] * (hi - l) / (hi - lo));
+    }
+    g.putImageData(im, 0, 0);
+  }
+  let x0 = 0, y0 = 0, x1 = W - 1, y1 = H - 1;
+  if (crop) {
+    x0 = W; y0 = H; x1 = -1; y1 = -1;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4;
+      const ink = removeWhite ? d[i + 3] > 24 : (d[i + 3] > 24 && Math.min(d[i], d[i + 1], d[i + 2]) < 235);
+      if (ink) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) { x0 = 0; y0 = 0; x1 = W - 1; y1 = H - 1; }
+    const pad = Math.round(Math.max(W, H) * 0.01);
+    x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+  }
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+  const out = new OffscreenCanvas(cw, ch); out.getContext("2d").drawImage(c, x0, y0, cw, ch, 0, 0, cw, ch);
+  return { blob: await out.convertToBlob({ type: "image/png" }), w: cw, h: ch };
+}
+$("sigUp").onclick = () => $("sigIn").click();
+$("sigIn").onchange = async () => {
+  for (const f of $("sigIn").files) {
+    try {
+      const r = await processImage(f, $("rmWhite").checked, $("crop").checked);
+      const s = { id: uid(), name: f.name.replace(/\.[^.]+$/, "") || "Signature", created: Date.now(), ...r };
+      await dbPut(s); await loadSigs(); arm({ type: "sig", sig: sigs.find(x => x.id === s.id) });
+    } catch (e) { console.error(e); toast("Couldn't read that image: " + e.message); }
+  }
+  $("sigIn").value = "";
+};
+$("txBtn").onclick = () => {
+  const t = $("txVal").value.trim();
+  if (!t) { $("txVal").focus(); toast("Type some text first"); return; }
+  if (armed?.type === "text") disarm(); else arm({ type: "text", text: t });
+};
+$("txVal").addEventListener("keydown", e => { if (e.key === "Enter") $("txBtn").click(); });
+
+// ===== PDF state =====
+let sources = [];   // {name, bytes:Uint8Array, doc}
+let pages = [];     // {key, src, idx, w, h (pt, rotated viewport @1), el, canvas, rendered}
+let placements = [];// {id, key, type, sigId|text, x,y,w,h (in viewport pts @1, top-left)}
+let zoom = 1, baseName = "document";
+
+$("openBtn").onclick = () => $("pdfIn").click();
+$("empty").onclick = () => $("pdfIn").click();
+$("addBtn").onclick = () => $("addIn").click();
+$("pdfIn").onchange = () => $("pdfIn").files[0] && openPdf($("pdfIn").files[0], false);
+$("addIn").onchange = () => $("addIn").files[0] && openPdf($("addIn").files[0], true);
+const desk = $("desk");
+desk.addEventListener("dragover", e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); desk.classList.add("over"); } });
+desk.addEventListener("dragleave", e => { if (e.target === desk || e.target === $("empty")) desk.classList.remove("over"); });
+desk.addEventListener("drop", e => {
+  const f = [...(e.dataTransfer.files || [])].find(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
+  if (f) { e.preventDefault(); desk.classList.remove("over"); openPdf(f, pages.length > 0 && e.shiftKey); }
+});
+window.addEventListener("dragover", e => e.preventDefault()); window.addEventListener("drop", e => e.preventDefault());
+
+async function openPdf(file, append) {
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+    if (!append) { sources = []; pages = []; placements = []; baseName = file.name.replace(/\.pdf$/i, "") || "document"; }
+    const src = sources.push({ name: file.name, bytes, doc }) - 1;
+    for (let i = 0; i < doc.numPages; i++) {
+      const p = await doc.getPage(i + 1); const vp = p.getViewport({ scale: 1 });
+      pages.push({ key: uid(), src, idx: i, w: vp.width, h: vp.height });
+    }
+    $("empty").hidden = true; $("saveBtn").disabled = false; $("addBtn").disabled = false;
+    if (!append) fitWidth(); else renderPages();
+    toast((append ? "Added " : "Opened ") + file.name + " · " + doc.numPages + " page" + (doc.numPages === 1 ? "" : "s"));
+  } catch (e) { console.error(e); toast("Couldn't open this PDF: " + (e.message || e), 4000); }
+  $("pdfIn").value = ""; $("addIn").value = "";
+}
+
+function setZoom(z) { zoom = Math.min(4, Math.max(0.25, z)); $("zVal").textContent = Math.round(zoom * 100) + "%"; renderPages(); }
+function fitWidth() { const maxW = Math.max(...pages.map(p => p.w), 1); setZoom((desk.clientWidth - 48) / maxW); }
+$("zIn").onclick = () => setZoom(zoom * 1.2); $("zOut").onclick = () => setZoom(zoom / 1.2); $("zFit").onclick = fitWidth;
+desk.addEventListener("wheel", e => { if (e.ctrlKey && pages.length) { e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); } }, { passive: false });
+
+let io;
+function renderPages() {
+  const box = $("pages"); box.innerHTML = ""; io?.disconnect();
+  io = new IntersectionObserver(ents => ents.forEach(en => { if (en.isIntersecting) drawPage(pages.find(p => p.key === en.target.dataset.key)); }), { root: desk, rootMargin: "800px" });
+  pages.forEach((p, n) => {
+    const el = document.createElement("div"); el.className = "pg" + (armed ? " arm" : ""); el.dataset.key = p.key;
+    el.style.width = p.w * zoom + "px"; el.style.height = p.h * zoom + "px"; el.style.marginTop = "1rem";
+    el.innerHTML = `<div class="pgbar"><span>Page ${n + 1} / ${pages.length}</span><span class="acts"><button data-a="up" title="Move up">↑</button><button data-a="down" title="Move down">↓</button><button data-a="del" title="Delete page">Delete page</button></span></div>`;
+    el.querySelector("[data-a=up]").disabled = n === 0; el.querySelector("[data-a=down]").disabled = n === pages.length - 1;
+    el.querySelector(".pgbar").addEventListener("click", e => { const a = e.target.dataset.a; if (!a) return; e.stopPropagation(); pageAction(p, a, e.target); });
+    const cv = document.createElement("canvas"); el.append(cv);
+    p.el = el; p.canvas = cv; p.rendered = 0;
+    el.addEventListener("pointerdown", e => { if (e.target === cv || e.target === el) { if (armed) placeAt(p, e); else select(null); } });
+    el.addEventListener("dragover", e => { if (e.dataTransfer.types.includes("application/x-3pdf-sig")) { e.preventDefault(); e.stopPropagation(); } });
+    el.addEventListener("drop", e => { const id = e.dataTransfer.getData("application/x-3pdf-sig"); const s = sigs.find(x => x.id === id); if (s) { e.preventDefault(); e.stopPropagation(); placeAt(p, e, { type: "sig", sig: s }); } });
+    box.append(el); io.observe(el);
+  });
+  placements.forEach(drawPlacement);
+}
+async function drawPage(p) {
+  if (!p || p.rendered === zoom) return; p.rendered = zoom;
+  const page = await sources[p.src].doc.getPage(p.idx + 1);
+  const dpr = window.devicePixelRatio || 1; const vp = page.getViewport({ scale: zoom * dpr });
+  const cv = p.canvas; cv.width = Math.floor(vp.width); cv.height = Math.floor(vp.height);
+  p.task?.cancel?.(); p.task = page.render({ canvasContext: cv.getContext("2d"), viewport: vp });
+  try { await p.task.promise; } catch (e) { if (e?.name !== "RenderingCancelledException") console.error(e); }
+}
+function pageAction(p, a, btn) {
+  const i = pages.indexOf(p);
+  if (a === "up" && i > 0) [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]];
+  else if (a === "down" && i < pages.length - 1) [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]];
+  else if (a === "del") {
+    if (pages.length === 1) { toast("A PDF needs at least one page"); return; }
+    if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "Click again to delete"; setTimeout(() => { btn.dataset.sure = ""; btn.textContent = "Delete page"; }, 3000); return; }
+    pages.splice(i, 1); placements = placements.filter(pl => pl.key !== p.key);
+  } else return;
+  renderPages();
+}
+
+// ===== placements =====
+function placeAt(p, e, a = armed) {
+  if (!a) return;
+  const r = p.el.getBoundingClientRect(); const cx = (e.clientX - r.left) / zoom, cy = (e.clientY - r.top) / zoom;
+  let pl;
+  if (a.type === "sig") {
+    const w = Math.min(160, p.w * 0.4), h = w * a.sig.h / a.sig.w;
+    pl = { id: uid(), key: p.key, type: "sig", sigId: a.sig.id, url: a.sig.url, blob: a.sig.blob, x: cx - w / 2, y: cy - h / 2, w, h };
+  } else {
+    const fs = 14, w = measure(a.text, fs), h = fs * 1.2;
+    pl = { id: uid(), key: p.key, type: "text", text: a.text, x: cx, y: cy - h / 2, w, h };
+  }
+  clamp(pl, p); placements.push(pl); drawPlacement(pl); select(pl);
+  if (e.preventDefault) e.preventDefault();
+}
+const mctx = document.createElement("canvas").getContext("2d");
+function measure(t, fs) { mctx.font = `${fs}px Helvetica, Arial, sans-serif`; return Math.max(...t.split("\n").map(l => mctx.measureText(l).width)) + fs * 0.2; }
+function clamp(pl, p) { pl.x = Math.max(-pl.w * 0.5, Math.min(p.w - pl.w * 0.5, pl.x)); pl.y = Math.max(-pl.h * 0.5, Math.min(p.h - pl.h * 0.5, pl.y)); }
+function select(pl) { selectedPl = pl; document.querySelectorAll(".pl").forEach(el => el.classList.toggle("sel", el.dataset.id === pl?.id)); }
+function drawPlacement(pl) {
+  const p = pages.find(x => x.key === pl.key); if (!p?.el) return;
+  let el = p.el.querySelector(`.pl[data-id="${pl.id}"]`);
+  if (!el) {
+    el = document.createElement("div"); el.className = "pl"; el.dataset.id = pl.id; el.tabIndex = 0;
+    if (pl.type === "sig") { const im = document.createElement("img"); im.src = pl.url; im.alt = "signature"; el.append(im); }
+    else { const t = document.createElement("div"); t.className = "txt"; t.textContent = pl.text; el.append(t); }
+    const h = document.createElement("div"); h.className = "h"; const x = document.createElement("button"); x.className = "x"; x.textContent = "×"; x.title = "Remove";
+    el.append(h, x);
+    x.addEventListener("pointerdown", e => e.stopPropagation());
+    x.addEventListener("click", e => { e.stopPropagation(); removePl(pl); });
+    el.addEventListener("keydown", e => { if (e.key === "Delete" || e.key === "Backspace") removePl(pl); });
+    el.addEventListener("pointerdown", e => startDrag(e, pl, p, e.target === h ? "resize" : "move"));
+    p.el.append(el);
+  }
+  el.style.left = pl.x * zoom + "px"; el.style.top = pl.y * zoom + "px"; el.style.width = pl.w * zoom + "px"; el.style.height = pl.h * zoom + "px";
+  if (pl.type === "text") el.querySelector(".txt").style.fontSize = pl.h / 1.2 * zoom + "px";
+}
+function removePl(pl) { placements = placements.filter(x => x !== pl); document.querySelector(`.pl[data-id="${pl.id}"]`)?.remove(); }
+function startDrag(e, pl, p, mode) {
+  e.preventDefault(); e.stopPropagation(); select(pl);
+  const el = e.currentTarget; el.setPointerCapture(e.pointerId); el.focus({ preventScroll: true });
+  const sx = e.clientX, sy = e.clientY, o = { ...pl }, ratio = o.h / o.w;
+  const move = ev => {
+    const dx = (ev.clientX - sx) / zoom, dy = (ev.clientY - sy) / zoom;
+    if (mode === "move") { pl.x = o.x + dx; pl.y = o.y + dy; clamp(pl, p); }
+    else { const w = Math.max(12, o.w + Math.max(dx, dy / ratio)); pl.w = w; pl.h = w * ratio; }
+    drawPlacement(pl);
+  };
+  const up = () => { el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
+  el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") { disarm(); select(null); } });
+
+// ===== export =====
+function textPng(pl) {
+  const s = 4, fs = pl.h / 1.2; const c = document.createElement("canvas"); c.width = Math.ceil(pl.w * s); c.height = Math.ceil(pl.h * s);
+  const g = c.getContext("2d"); g.scale(s, s); g.fillStyle = "#111"; g.font = `${fs}px Helvetica, Arial, sans-serif`; g.textBaseline = "middle";
+  g.fillText(pl.text, fs * 0.1, pl.h / 2);
+  return new Promise(r => c.toBlob(b => b.arrayBuffer().then(r), "image/png"));
+}
+$("saveBtn").onclick = async () => {
+  const btn = $("saveBtn"); btn.disabled = true; const old = btn.textContent; btn.textContent = "Saving…";
+  try {
+    const { PDFDocument, degrees } = PDFLib;
+    const out = await PDFDocument.create();
+    const libs = await Promise.all(sources.map(s => PDFDocument.load(s.bytes, { ignoreEncryption: true })));
+    const imgCache = new Map();
+    for (const p of pages) {
+      const [cp] = await out.copyPages(libs[p.src], [p.idx]); out.addPage(cp);
+      const mine = placements.filter(pl => pl.key === p.key); if (!mine.length) continue;
+      const vp = (await sources[p.src].doc.getPage(p.idx + 1)).getViewport({ scale: 1 });
+      const rot = ((cp.getRotation().angle % 360) + 360) % 360;
+      for (const pl of mine) {
+        let img;
+        if (pl.type === "sig") { img = imgCache.get(pl.sigId); if (!img) { img = await out.embedPng(await pl.blob.arrayBuffer()); imgCache.set(pl.sigId, img); } }
+        else img = await out.embedPng(await textPng(pl));
+        // map viewport rect corners -> PDF user space (handles crop box offset and page rotation)
+        const [ax, ay] = vp.convertToPdfPoint(pl.x, pl.y + pl.h);           // visual bottom-left
+        const pw = pl.w, ph = pl.h;
+        const opts = { x: ax, y: ay, width: pw, height: ph };
+        if (rot) opts.rotate = degrees(rot);
+        cp.drawImage(img, opts);
+      }
+    }
+    const bytes = await out.save();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })); a.download = baseName + "-signed.pdf";
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    toast("✅ Saved " + a.download);
+  } catch (e) { console.error(e); toast("Saving failed: " + (e.message || e), 5000); }
+  btn.disabled = false; btn.textContent = old;
+};
+window.addEventListener("resize", () => {});
+await loadSigs();
+window.__3pdf = { get placements() { return placements; }, get pages() { return pages; }, get sigs() { return sigs; } };
+</script>
+</body>
+</html>
