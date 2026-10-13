@@ -114,6 +114,7 @@ function inline(span,val,cb){const i=document.createElement('input');i.className
  i.onkeydown=e=>{e.stopPropagation();if(e.key==='Enter'){e.preventDefault();end(true)}if(e.key==='Escape')e.preventDefault();if(e.key==='Escape')end(false)};i.onblur=()=>end(true);i.onclick=e=>e.stopPropagation()}
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.code==='KeyS'){e.preventDefault();e.stopPropagation();const n=cur();if(n&&document.activeElement===ed){n.html=ed.innerHTML.replace(/ class="tsel"/g,'');dirty=true}dirty=true;flush();toast('No need to save. Every change is saved automatically.')}},true);
 let freshCat=null;const SH={past:[],future:[]};
 function snapSide(){return {cats:D.cats.map(c=>({...c})),notes:D.notes.map(n=>({ref:n,cat:n.cat,title:n.title})),current:D.current}}
 function sideAct(label){SH.past.push({snap:snapSide(),label});if(SH.past.length>50)SH.past.shift();SH.future=[]}
