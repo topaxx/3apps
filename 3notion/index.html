@@ -408,10 +408,13 @@ $('#hlDrop').onmousedown=e=>{e.preventDefault();const m=$('#hlMenu');if(m.hidden
 $('#hlMenu').onmousedown=e=>{e.preventDefault();const b=e.target.closest('button');if(!b)return;$('#hlMenu').hidden=true;if(b.dataset.rm)removeHL();else{hlColor=b.dataset.c;try{localStorage.setItem('3notion-hl',hlColor)}catch(_){}applyHL(hlColor)}};
 document.addEventListener('mousedown',e=>{if(!e.target.closest('#hlWrap'))$('#hlMenu').hidden=true});
 
-const CB=/^\s*\[( |x|X)\]\s*/;
+const normTx=t=>t.replace(/[\u00a0\u2007\u202f]/g,' ').replace(/[\u200b\u200c\u200d\u2060\ufeff]/g,'');
+const CB=/^\s*(?:\[( |x|X)?\]|(☐)|([☑✅✔]))\s*/;
+function ownTexts(li){const out=[],w=document.createTreeWalker(li,4);let n;while(n=w.nextNode()){if(n.parentNode.closest('ul,ol')!==li.parentNode)break;out.push(n)}return out}
 function firstText(li){const w=document.createTreeWalker(li,4);let n;while(n=w.nextNode()){if(n.parentNode.closest('ul,ol')!==li.parentNode)return null;if(n.textContent.trim())return n}return null}
 function convLists(root){
- root.querySelectorAll('li').forEach(li=>{const t=firstText(li);if(t&&CB.test(t.textContent)){const m=t.textContent.match(CB);t.textContent=t.textContent.replace(CB,'');li.dataset.cb=m[1].toLowerCase()==='x'?'x':' '}});
+ root.querySelectorAll('li').forEach(li=>{const own=ownTexts(li);own.forEach(t=>{const v=normTx(t.textContent);if(v!==t.textContent)t.textContent=v});const full=own.map(t=>t.textContent).join('');const m=full.match(CB);if(!m)return;
+  let k=m[0].length;for(const t of own){if(k<=0)break;const L=t.textContent.length;t.textContent=t.textContent.slice(Math.min(k,L));k-=L}li.dataset.cb=(m[1]&&m[1].toLowerCase()==='x')||m[3]?'x':' '});
  root.querySelectorAll('ul,ol').forEach(ul=>{const lis=[...ul.children].filter(x=>x.nodeName==='LI');if(!lis.length)return;
   if(lis.every(li=>li.dataset.cb)){const u=ul.nodeName==='OL'?(()=>{const x=document.createElement('ul');while(ul.firstChild)x.appendChild(ul.firstChild);ul.replaceWith(x);return x})():ul;u.className='todo';lis.forEach(li=>{if(li.dataset.cb==='x')li.className='done'})}
   else if(ul.nodeName==='UL'&&lis.some(li=>li.querySelector(':scope>ul,:scope>ol'))){ul.className='toggle';lis.forEach(li=>{if(li.querySelector(':scope>ul,:scope>ol'))li.dataset.collapsed='1'})}
@@ -419,11 +422,11 @@ function convLists(root){
  root.querySelectorAll('li[data-cb]').forEach(li=>{if(!li.parentNode.classList.contains('todo')){const t=firstText(li);if(t)t.textContent=(li.dataset.cb==='x'?'☑ ':'☐ ')+t.textContent}li.removeAttribute('data-cb')})}
 function mdToHtml(tx){const lines=tx.replace(/\r/g,'').split('\n');let out='',stack=[];const close=to=>{while(stack.length>to){out+='</li></'+stack.pop().tag+'>'}};
  for(const raw of lines){const ind=(raw.match(/^[ \t]*/)[0]).replace(/\t/g,'    ').length;const line=raw.trim();
-  let m=line.match(/^([-*+]|\d+\.)\s+(.*)$/)||(CB.test(line)?[line,'-',line]:null);
+  let m=line.match(/^([-*+]|\d+\.)(?:\s+(.*))?$/)||(CB.test(line)?[line,'-',line]:null);
   if(m){const tag=/\d/.test(m[1])?'ol':'ul';let lvl=0;while(lvl<stack.length&&stack[lvl].ind<ind)lvl++;
    if(lvl<stack.length&&stack[lvl].ind===ind){close(lvl+1);out+='</li><li>'}else{close(lvl);stack.push({ind,tag});out+='<'+tag+'><li>'}
-   out+=esc(m[2]);continue}
-  close(0);if(!line){continue}const h=line.match(/^(#{1,3})\s+(.*)$/);out+=h?`<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`:'<p>'+esc(line)+'</p>'}
+   out+=esc(m[2]||'');continue}
+  if(!line){continue}close(0);const h=line.match(/^(#{1,3})\s+(.*)$/);out+=h?`<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`:'<p>'+esc(line)+'</p>'}
  close(0);return out}
 function listItem(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return null;const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentNode;if(el.closest('td,th'))return null;return el.closest('#editor li')}
 ed.addEventListener('keydown',e=>{if(e.key!=='Tab'||e.ctrlKey||e.altKey||e.metaKey)return;const li=listItem();if(!li)return;e.preventDefault();const off=caretOff();const ul=li.parentNode;
@@ -439,7 +442,8 @@ function clean(html,keep){const t=document.createElement('template');t.innerHTML
    const rest=document.createElement('div');[...n.childNodes].filter(x=>x!==sm).forEach(x=>rest.appendChild(x.cloneNode(true)));const sub=document.createDocumentFragment();walk(rest,sub);
    const kids=[...sub.childNodes].filter(x=>x.nodeType!==3||x.textContent.trim());if(kids.length){kids.forEach(k=>{if(k.nodeType===3){const p=document.createElement('p');p.appendChild(k);li.appendChild(p)}else li.appendChild(k)})}
    ul.appendChild(li);dst.appendChild(ul);continue}
-  if(n.nodeName==='SUMMARY'){walk(n,dst);continue}let tag=MAP[n.nodeName]||n.nodeName;
+  if(n.nodeName==='SUMMARY'){walk(n,dst);continue}
+  if(n.nodeName==='INPUT'){if((n.getAttribute('type')||'').toLowerCase()==='checkbox')dst.appendChild(document.createTextNode(n.hasAttribute('checked')||n.checked?'[x] ':'[ ] '));continue}let tag=MAP[n.nodeName]||n.nodeName;
   if(!OK[tag]){walk(n,dst);continue}const e=document.createElement(tag);
   if(tag==='IMG'){const sr=n.getAttribute('src')||'';if(!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(sr))continue;e.setAttribute('src',sr);const w=parseInt(n.getAttribute('data-w')||n.style.width)||100;e.style.width=Math.min(100,Math.max(10,w))+'%';dst.appendChild(e);continue}
   if(tag==='COL'){const w=parseInt(n.style.width||n.getAttribute('width'));if(w>20)e.style.width=Math.min(1200,w)+'px';dst.appendChild(e);continue}
@@ -455,7 +459,8 @@ ed.addEventListener('copy',e=>{const s=getSelection();if(!s.rangeCount||s.isColl
  e.clipboardData.setData('text/html',d.innerHTML);e.clipboardData.setData('application/x-notities',d.innerHTML);e.clipboardData.setData('text/plain',r.toString());e.preventDefault()});
 ed.addEventListener('paste',e=>{const cd=e.clipboardData,cu=cd.getData('application/x-notities');let h=cd.getData('text/html');
  let imgs=[...(cd.files||[])].filter(f=>/^image\//.test(f.type));if(!imgs.length&&cd.items)imgs=[...cd.items].filter(i=>i.kind==='file'&&/^image\//.test(i.type)).map(i=>i.getAsFile()).filter(Boolean);if(!cu&&imgs.length){e.preventDefault();insertFiles(imgs);return}
- if(!cu&&!h){const tx=cd.getData('text/plain');if(tx&&/^\s*([-*+]\s|\d+\.\s|\[[ xX]\])/m.test(tx))h=mdToHtml(tx)}
+ const tx=cd.getData('text/plain');try{console.debug('[3notion] paste types:',[...(cd.types||[])],'html length:',h.length,'text length:',tx.length)}catch(_){}
+ if(!cu&&tx){const t2=normTx(tx);if(/^[ \t]*[-*+][ \t]+(\[[ xX]?\]|[☐☑✅])/m.test(t2)||/^[ \t]+([-*+]|\d+\.)[ \t]/m.test(t2)||(!h&&/^[ \t]*([-*+][ \t]|\d+\.[ \t]|\[[ xX]?\])/m.test(t2)))h=mdToHtml(t2)}
  if(!cu&&!h)return;e.preventDefault();const frag=clean(cu||h,!!cu);if(!frag.childNodes.length)return;
  const s=getSelection();if(!s.rangeCount)return;const r=s.getRangeAt(0);r.deleteContents();
  const inCell=r.startContainer.nodeType&&(r.startContainer.nodeType===1?r.startContainer:r.startContainer.parentNode).closest('#editor td,#editor th');
