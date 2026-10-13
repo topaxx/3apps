@@ -38,9 +38,9 @@ button:hover{background:var(--hover)}
 #editor{outline:none;min-height:300px;line-height:1.6;font-size:16px}
 #editor:empty:before{content:attr(data-ph);color:var(--muted)}
 #editor a{color:var(--accent)}#editor h1{font-size:28px}#editor h2{font-size:22px}
-ul.todo{list-style:none;padding-left:4px}ul.todo li{position:relative;padding-left:26px}
-ul.todo li:before{content:"";position:absolute;left:0;top:5px;width:14px;height:14px;border:1.5px solid var(--muted);border-radius:3px;cursor:pointer}
-ul.todo li.done{text-decoration:line-through;color:var(--muted)}ul.todo li.done:before{background:var(--accent);border-color:var(--accent)}
+ul.todo{list-style:none;padding-left:4px}ul.todo>li{position:relative;padding-left:26px}
+ul.todo>li:before{content:"";position:absolute;left:0;top:5px;width:14px;height:14px;border:1.5px solid var(--muted);border-radius:3px;cursor:pointer}
+ul.todo>li.done{text-decoration:line-through;color:var(--muted)}ul.todo>li.done:before{background:var(--accent);border-color:var(--accent)}
 #editor h1,#editor h2,#editor h3{position:relative}#editor h3{font-size:18px}
 #editor h1::before,#editor h2::before,#editor h3::before{content:"▼";position:absolute;left:-24px;width:20px;font-size:.5em;top:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);opacity:0;cursor:pointer;transition:opacity .1s}
 #editor h1:hover::before,#editor h2:hover::before,#editor h3:hover::before{opacity:1}
@@ -71,6 +71,10 @@ body.dark mark.hl-yellow{background:#6b5d12}body.dark mark.hl-green{background:#
 #hlWrap{position:relative;display:inline-flex}#hlDrop{min-width:16px!important;padding:3px 2px}
 #hlMenu{position:absolute;top:100%;left:0;z-index:9;background:var(--bg);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;min-width:170px}
 #hlMenu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 8px;font-size:13px}#hlMenu .sw{width:14px;height:14px;border-radius:3px;border:1px solid var(--border)}#hlMenu button.cur{font-weight:600}
+ul.toggle{list-style:none;padding-left:4px}ul.toggle>li{position:relative;padding-left:24px}
+ul.toggle>li::before{content:"▼";position:absolute;left:2px;top:.35em;font-size:.7em;color:var(--muted);cursor:pointer;width:16px;text-align:center}
+ul.toggle>li[data-collapsed="1"]::before{content:"▶"}
+ul.toggle>li[data-collapsed="1"]>:is(ul,ol,p,div,table,h1,h2,h3){display:none}
 #empty{color:var(--muted);text-align:center;margin-top:30vh}
 #status{font-size:12px;color:var(--muted);margin-left:8px}
 </style></head><body>
@@ -81,7 +85,7 @@ body.dark mark.hl-yellow{background:#6b5d12}body.dark mark.hl-green{background:#
 <button data-c="bold" title="Bold (Ctrl+B)"><b>B</b></button><button data-c="italic" title="Italic (Ctrl+I)"><i>I</i></button><button data-c="underline" title="Underline (Ctrl+U)"><u>U</u></button>
 <button data-b="H1" title="Heading 1 (Ctrl+1 or Ctrl+Shift+1)">H1</button><button data-b="H2" title="Heading 2 (Ctrl+2 or Ctrl+Shift+2)">H2</button><button data-b="H3" title="Heading 3 (Ctrl+3 or Ctrl+Shift+3)">H3</button><button data-b="P" title="Normal text (Ctrl+0 or Ctrl+Shift+0)">¶</button>
 <button data-c="insertUnorderedList" title="Bulleted list (Ctrl+L or Ctrl+Shift+8)">• List</button><button data-c="insertOrderedList" title="Numbered list (Ctrl+Shift+L or Ctrl+Shift+7)">1. List</button>
-<button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><span id="hlWrap"><button id="hlBtn" title="Highlight (Ctrl+Shift+H)">🖍 Highlight</button><button id="hlDrop" title="Highlight color">▾</button><div id="hlMenu" hidden></div></span><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
+<button id="toggleBtn" title="Toggle list (type &quot;&gt; &quot; at line start)">▸ Toggle</button><button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><span id="hlWrap"><button id="hlBtn" title="Highlight (Ctrl+Shift+H)">🖍 Highlight</button><button id="hlDrop" title="Highlight color">▾</button><div id="hlMenu" hidden></div></span><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
 <select id="moveSel" title="Move to"></select></div>
 <div id="page"><div id="inner"><div id="empty">Select or create a note</div>
 <div id="noteView" hidden><input id="title" placeholder="Untitled"><div id="editor" contenteditable="true" data-ph="Start typing… (tip: # , ## , - , 1. , [] )"></div></div></div></div></main>
@@ -165,21 +169,24 @@ $('#addCat').onclick=()=>{sideAct('category created');const c={id:uid(),name:'Ne
 $('#newNote').onclick=()=>{$('#search').value='';newNote(cur()&&cur().cat)};
 $('#title').oninput=e=>{const n=cur();if(n){n.title=e.target.value;n.updated=Date.now();save();render()}};
 $('#title').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#editor').focus()}};
-const ed=$('#editor');let tmr;ed.oninput=(ev)=>{const n=cur();if(!n)return;recompute();if(selImg)selImg.classList.remove('sel');let _h=ed.innerHTML;if(_h.includes('tsel'))_h=_h.replace(/ class="tsel"/g,'').replace(/ tsel\b/g,'');if(selImg)selImg.classList.add('sel');histPush(n,_h,ev);n.html=_h;n.updated=Date.now();save()};
+const ed=$('#editor');let tmr;ed.oninput=(ev)=>{const n=cur();if(!n)return;const bad=ed.querySelectorAll(':scope>p>ul,:scope>p>ol');if(bad.length){const o=caretOff();bad.forEach(l=>{const p=l.parentNode;if(p.parentNode!==ed)return;[...p.childNodes].forEach(x=>{if(x.nodeType===3&&!x.textContent.trim()||x.nodeName==='BR')x.remove()});p.replaceWith(...p.childNodes)});setCaretOff(o)}recompute();if(selImg)selImg.classList.remove('sel');let _h=ed.innerHTML;if(_h.includes('tsel'))_h=_h.replace(/ class="tsel"/g,'').replace(/ tsel\b/g,'');if(selImg)selImg.classList.add('sel');histPush(n,_h,ev);n.html=_h;n.updated=Date.now();save()};
 window.addEventListener('beforeunload',()=>{const n=cur();if(n&&!$('#noteView').hidden){n.html=ed.innerHTML;dirty=true}flush()});window.addEventListener('pagehide',flush);document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
 document.querySelectorAll('#toolbar [data-c]').forEach(b=>b.onmousedown=e=>{e.preventDefault();document.execCommand(b.dataset.c);ed.oninput();updateActive()});
 function setBlock(t){const sl=getSelection();const b=sl.rangeCount&&ed.contains(sl.anchorNode)?blockOf(sl.anchorNode):null;if(t!=='P'&&b&&b.nodeName===t)t='P';document.execCommand('formatBlock',false,t);recompute();ed.oninput();updateActive()}
 document.querySelectorAll('#toolbar [data-b]').forEach(b=>b.onmousedown=e=>{e.preventDefault();setBlock(b.dataset.b)});
-function todo(){document.execCommand('insertUnorderedList');const s=getSelection();let n=s.anchorNode;while(n&&n!==ed&&n.nodeName!=='UL')n=n.parentNode;if(n&&n.nodeName==='UL')n.classList.add('todo');ed.oninput()}
+function listOf(){const s=getSelection();if(!s.rangeCount)return null;let n=s.anchorNode;if(n&&n.nodeType===1&&n.nodeName!=='UL'&&n.nodeName!=='LI'){const c=n.childNodes[s.anchorOffset]||n.lastChild;if(c&&c.nodeType===1&&c.querySelector&&(c.nodeName==='UL'||c.querySelector('ul')))n=c.nodeName==='UL'?c:c.querySelector('ul')}while(n&&n!==ed&&n.nodeName!=='UL')n=n.parentNode;if(n&&n.nodeName==='UL')return n;const b=blockOf(s.anchorNode);return b&&b!==ed&&b.querySelector?(b.nodeName==='UL'?b:b.querySelector('ul')):null}
+function todo(){const u0=listOf();if(u0&&u0.classList.contains('todo')){document.execCommand('insertUnorderedList');ed.oninput();return}if(!u0)document.execCommand('insertUnorderedList');const n=listOf();if(n){n.classList.add('todo');n.classList.remove('toggle')}ed.oninput()}
+function toggleList(){const u0=listOf();if(u0&&u0.classList.contains('toggle')){document.execCommand('insertUnorderedList');ed.oninput();return}if(!u0)document.execCommand('insertUnorderedList');const n=listOf();if(n){n.classList.add('toggle');n.classList.remove('todo')}ed.oninput();updateActive()}
+$('#toggleBtn').onmousedown=e=>{e.preventDefault();toggleList()};
 $('#todoBtn').onmousedown=e=>{e.preventDefault();todo();updateActive()};
 $('#linkBtn').onmousedown=e=>{e.preventDefault();doLink()};function doLink(){const sel=getSelection(),rg=sel.rangeCount?sel.getRangeAt(0).cloneRange():null;ask('Link address (URL):',{input:true,def:'https://'}).then(u=>{ed.focus();if(rg){sel.removeAllRanges();sel.addRange(rg)}if(u&&u!=='https://'){if(rg&&rg.collapsed)document.execCommand('insertHTML',false,'<a href="'+esc(u)+'">'+esc(u)+'</a>');else document.execCommand('createLink',false,u)}ed.oninput();updateActive()})}
 ed.onclick=e=>{const a=e.target.closest('a');if(a&&(e.ctrlKey||e.metaKey)){window.open(a.href,'_blank');return}
- const li=e.target.closest('ul.todo li');if(li&&e.offsetX<22){li.classList.toggle('done');ed.oninput()}};
+ const li=e.target.closest('li');if(li&&ed.contains(li)&&e.offsetX<22&&e.target===li){const ul=li.parentNode;if(ul.classList.contains('todo')){li.classList.toggle('done');ed.oninput()}else if(ul.classList.contains('toggle')){if(li.dataset.collapsed==='1')li.removeAttribute('data-collapsed');else li.dataset.collapsed='1';ed.oninput()}}};
 ed.onkeydown=e=>{if(e.key!==' ')return;const s=getSelection();if(!s.rangeCount)return;const nd=s.anchorNode;if(nd.nodeType!==3)return;
- const txt=nd.textContent.slice(0,s.anchorOffset);const m={'#':['formatBlock','H1'],'##':['formatBlock','H2'],'-':['insertUnorderedList'],'*':['insertUnorderedList'],'1.':['insertOrderedList'],'[]':['todo']}[txt];
+ const txt=nd.textContent.slice(0,s.anchorOffset);const m={'#':['formatBlock','H1'],'##':['formatBlock','H2'],'-':['insertUnorderedList'],'*':['insertUnorderedList'],'1.':['insertOrderedList'],'[]':['todo'],'>':['toggle']}[txt];
  if(!m)return;let blk=nd.parentNode;if(blk!==ed&&!/^(DIV|P)$/.test(blk.nodeName))return;if(nd.previousSibling)return;
  e.preventDefault();const r=document.createRange();r.setStart(nd,0);r.setEnd(nd,s.anchorOffset);s.removeAllRanges();s.addRange(r);document.execCommand('delete');
- if(m[0]==='todo')todo();else document.execCommand(m[0],false,m[1]);ed.oninput()};
+ if(m[0]==='todo')todo();else if(m[0]==='toggle')toggleList();else document.execCommand(m[0],false,m[1]);ed.oninput()};
 $('#moveSel').onchange=e=>{const n=cur();if(n&&e.target.value&&e.target.value!==n.cat){sideAct('note moved');n.cat=e.target.value;save();render()}e.target.value=''};
 $('#search').oninput=render;
 $('#exp').onclick=()=>{const b=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='3notion-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click()};
@@ -206,11 +213,11 @@ ed.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.shiftKey)return;const s=
 
 function updateActive(){const sl=getSelection();const inEd=sl.rangeCount&&ed.contains(sl.anchorNode);const q=c=>{try{return inEd&&document.queryCommandState(c)}catch(_){return false}};
  const el=inEd?(sl.anchorNode.nodeType===1?sl.anchorNode:sl.anchorNode.parentNode):null,b=inEd?blockOf(sl.anchorNode):null,tag=b&&b!==ed?b.nodeName:'';
- const todoOn=!!(el&&el.closest&&el.closest('ul.todo'));const set=(sel,on)=>{const x=document.querySelector(sel);if(x)x.classList.toggle('on',!!on)};
+ const todoOn=!!(el&&el.closest&&(()=>{const u=el.closest('#editor ul');return u&&u.classList.contains('todo')})());const set=(sel,on)=>{const x=document.querySelector(sel);if(x)x.classList.toggle('on',!!on)};
  const inT=t=>!!(el&&el.closest&&(el.closest(t)||'')&&ed.contains(el.closest(t)));const sp=k=>!sl.isCollapsed&&q(k);
  set('[data-c=bold]',inT('b,strong')||sp('bold')&&!/^H/.test(tag));set('[data-c=italic]',inT('i,em')||sp('italic'));set('[data-c=underline]',inT('u')||sp('underline')&&!inT('a'));
  ['H1','H2','H3'].forEach(t=>set(`[data-b=${t}]`,tag===t));set('[data-b=P]',inEd&&(tag==='P'||tag==='DIV')&&!(el&&el.closest&&el.closest('#editor li')));
- set('[data-c=insertUnorderedList]',q('insertUnorderedList')&&!todoOn);set('[data-c=insertOrderedList]',q('insertOrderedList'));set('#todoBtn',todoOn);
+ const tgOn=!!(el&&el.closest&&(()=>{const u=el.closest('#editor ul');return u&&u.classList.contains('toggle')})());set('#toggleBtn',tgOn);set('[data-c=insertUnorderedList]',q('insertUnorderedList')&&!todoOn&&!tgOn);set('[data-c=insertOrderedList]',q('insertOrderedList'));set('#todoBtn',todoOn);
  set('#linkBtn',el&&el.closest&&el.closest('#editor a'));set('#hlBtn',el&&el.closest&&el.closest('#editor mark'))}
 document.addEventListener('selectionchange',updateActive);ed.addEventListener('keyup',updateActive);ed.addEventListener('click',updateActive);
 window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const c=e.code;
@@ -400,10 +407,39 @@ $('#hlBtn').onmousedown=e=>{e.preventDefault();toggleHL()};
 $('#hlDrop').onmousedown=e=>{e.preventDefault();const m=$('#hlMenu');if(m.hidden){hlMenu();m.hidden=false}else m.hidden=true};
 $('#hlMenu').onmousedown=e=>{e.preventDefault();const b=e.target.closest('button');if(!b)return;$('#hlMenu').hidden=true;if(b.dataset.rm)removeHL();else{hlColor=b.dataset.c;try{localStorage.setItem('3notion-hl',hlColor)}catch(_){}applyHL(hlColor)}};
 document.addEventListener('mousedown',e=>{if(!e.target.closest('#hlWrap'))$('#hlMenu').hidden=true});
+
+const CB=/^\s*\[( |x|X)\]\s*/;
+function firstText(li){const w=document.createTreeWalker(li,4);let n;while(n=w.nextNode()){if(n.parentNode.closest('ul,ol')!==li.parentNode)return null;if(n.textContent.trim())return n}return null}
+function convLists(root){
+ root.querySelectorAll('li').forEach(li=>{const t=firstText(li);if(t&&CB.test(t.textContent)){const m=t.textContent.match(CB);t.textContent=t.textContent.replace(CB,'');li.dataset.cb=m[1].toLowerCase()==='x'?'x':' '}});
+ root.querySelectorAll('ul,ol').forEach(ul=>{const lis=[...ul.children].filter(x=>x.nodeName==='LI');if(!lis.length)return;
+  if(lis.every(li=>li.dataset.cb)){const u=ul.nodeName==='OL'?(()=>{const x=document.createElement('ul');while(ul.firstChild)x.appendChild(ul.firstChild);ul.replaceWith(x);return x})():ul;u.className='todo';lis.forEach(li=>{if(li.dataset.cb==='x')li.className='done'})}
+  else if(ul.nodeName==='UL'&&lis.some(li=>li.querySelector(':scope>ul,:scope>ol'))){ul.className='toggle';lis.forEach(li=>{if(li.querySelector(':scope>ul,:scope>ol'))li.dataset.collapsed='1'})}
+  lis.forEach(li=>{if(li.dataset.cb&&!ul.classList.contains('todo')&&li.dataset.cb){}})});
+ root.querySelectorAll('li[data-cb]').forEach(li=>{if(!li.parentNode.classList.contains('todo')){const t=firstText(li);if(t)t.textContent=(li.dataset.cb==='x'?'☑ ':'☐ ')+t.textContent}li.removeAttribute('data-cb')})}
+function mdToHtml(tx){const lines=tx.replace(/\r/g,'').split('\n');let out='',stack=[];const close=to=>{while(stack.length>to){out+='</li></'+stack.pop().tag+'>'}};
+ for(const raw of lines){const ind=(raw.match(/^[ \t]*/)[0]).replace(/\t/g,'    ').length;const line=raw.trim();
+  let m=line.match(/^([-*+]|\d+\.)\s+(.*)$/)||(CB.test(line)?[line,'-',line]:null);
+  if(m){const tag=/\d/.test(m[1])?'ol':'ul';let lvl=0;while(lvl<stack.length&&stack[lvl].ind<ind)lvl++;
+   if(lvl<stack.length&&stack[lvl].ind===ind){close(lvl+1);out+='</li><li>'}else{close(lvl);stack.push({ind,tag});out+='<'+tag+'><li>'}
+   out+=esc(m[2]);continue}
+  close(0);if(!line){continue}const h=line.match(/^(#{1,3})\s+(.*)$/);out+=h?`<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`:'<p>'+esc(line)+'</p>'}
+ close(0);return out}
+function listItem(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return null;const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentNode;if(el.closest('td,th'))return null;return el.closest('#editor li')}
+ed.addEventListener('keydown',e=>{if(e.key!=='Tab'||e.ctrlKey||e.altKey||e.metaKey)return;const li=listItem();if(!li)return;e.preventDefault();const off=caretOff();const ul=li.parentNode;
+ if(!e.shiftKey){const prev=li.previousElementSibling;if(!prev||prev.nodeName!=='LI')return;let sub=[...prev.children].reverse().find(x=>/^(UL|OL)$/.test(x.nodeName));
+  if(!sub){sub=document.createElement(ul.nodeName);if(ul.className)sub.className=ul.className;prev.appendChild(sub);if(ul.classList.contains('toggle'))prev.removeAttribute('data-collapsed')}sub.appendChild(li)}
+ else{const pli=ul.parentNode;if(!pli||pli.nodeName!=='LI')return;const after=[...ul.children].slice([...ul.children].indexOf(li)+1);pli.after(li);if(after.length){const nu=document.createElement(ul.nodeName);if(ul.className)nu.className=ul.className;after.forEach(x=>nu.appendChild(x));li.appendChild(nu)}if(!ul.children.length)ul.remove()}
+ setCaretOff(off);ed.oninput();updateActive()});
 const OK={MARK:1,TABLE:1,TBODY:1,TR:1,TH:1,TD:1,COLGROUP:1,COL:1,IMG:1,H1:1,H2:1,H3:1,P:1,B:1,I:1,U:1,UL:1,OL:1,LI:1,A:1,BR:1},MAP={THEAD:'TBODY',TFOOT:'TBODY',STRONG:'B',EM:'I',DIV:'P',H4:'H3',H5:'H3',H6:'H3'};
 function clean(html,keep){const t=document.createElement('template');t.innerHTML=html;const out=document.createDocumentFragment();
  const walk=(src,dst)=>{for(const n of [...src.childNodes]){if(n.nodeType===3){dst.appendChild(document.createTextNode(n.textContent));continue}if(n.nodeType!==1)continue;
-  if(/^(SCRIPT|STYLE|META|TITLE|HEAD)$/.test(n.nodeName))continue;let tag=MAP[n.nodeName]||n.nodeName;
+  if(/^(SCRIPT|STYLE|META|TITLE|HEAD)$/.test(n.nodeName))continue;
+  if(n.nodeName==='DETAILS'){const ul=document.createElement('ul');ul.className='toggle';const li=document.createElement('li');li.dataset.collapsed='1';const sm=n.querySelector(':scope>summary');if(sm)walk(sm,li);
+   const rest=document.createElement('div');[...n.childNodes].filter(x=>x!==sm).forEach(x=>rest.appendChild(x.cloneNode(true)));const sub=document.createDocumentFragment();walk(rest,sub);
+   const kids=[...sub.childNodes].filter(x=>x.nodeType!==3||x.textContent.trim());if(kids.length){kids.forEach(k=>{if(k.nodeType===3){const p=document.createElement('p');p.appendChild(k);li.appendChild(p)}else li.appendChild(k)})}
+   ul.appendChild(li);dst.appendChild(ul);continue}
+  if(n.nodeName==='SUMMARY'){walk(n,dst);continue}let tag=MAP[n.nodeName]||n.nodeName;
   if(!OK[tag]){walk(n,dst);continue}const e=document.createElement(tag);
   if(tag==='IMG'){const sr=n.getAttribute('src')||'';if(!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(sr))continue;e.setAttribute('src',sr);const w=parseInt(n.getAttribute('data-w')||n.style.width)||100;e.style.width=Math.min(100,Math.max(10,w))+'%';dst.appendChild(e);continue}
   if(tag==='COL'){const w=parseInt(n.style.width||n.getAttribute('width'));if(w>20)e.style.width=Math.min(1200,w)+'px';dst.appendChild(e);continue}
@@ -411,14 +447,15 @@ function clean(html,keep){const t=document.createElement('template');t.innerHTML
   if(tag==='MARK'){const m=(n.className||'').match(/hl-(yellow|green|blue|pink|orange)/);e.className=m?m[0]:'hl-yellow'}
   if(tag==='A'){const h=n.getAttribute('href')||'';if(/^(https?:|mailto:)/i.test(h))e.setAttribute('href',h)}
   if(keep&&/^H/.test(tag)&&n.getAttribute('data-collapsed')==='1')e.dataset.collapsed='1';
-  if(tag==='UL'&&n.classList.contains('todo'))e.className='todo';if(tag==='LI'&&n.classList.contains('done'))e.className='done';
-  walk(n,e);dst.appendChild(e)}};walk(t.content,out);return out}
+  if(tag==='UL'&&n.classList.contains('todo'))e.className='todo';if(tag==='UL'&&n.classList.contains('toggle'))e.className='toggle';if(tag==='LI'&&n.classList.contains('done'))e.className='done';if(tag==='LI'&&keep&&n.getAttribute('data-collapsed')==='1')e.dataset.collapsed='1';
+  walk(n,e);dst.appendChild(e)}};walk(t.content,out);if(!keep)convLists(out);return out}
 ed.addEventListener('copy',e=>{const s=getSelection();if(!s.rangeCount||s.isCollapsed)return;const r=s.getRangeAt(0).cloneRange();
  let eb=blockOf(r.endContainer);if(eb&&eb!==ed){let nx=eb.nextElementSibling;if((eb.dataset&&eb.dataset.collapsed==='1')||(nx&&nx.classList.contains('hbt'))){while(nx&&nx.classList.contains('hbt')){eb=nx;nx=nx.nextElementSibling}if(eb!==blockOf(r.endContainer))r.setEndAfter(eb)}}
  const d=document.createElement('div');d.appendChild(r.cloneContents());d.querySelectorAll('.hbt').forEach(x=>x.classList.remove('hbt'));
  e.clipboardData.setData('text/html',d.innerHTML);e.clipboardData.setData('application/x-notities',d.innerHTML);e.clipboardData.setData('text/plain',r.toString());e.preventDefault()});
-ed.addEventListener('paste',e=>{const cd=e.clipboardData,cu=cd.getData('application/x-notities'),h=cd.getData('text/html');
+ed.addEventListener('paste',e=>{const cd=e.clipboardData,cu=cd.getData('application/x-notities');let h=cd.getData('text/html');
  let imgs=[...(cd.files||[])].filter(f=>/^image\//.test(f.type));if(!imgs.length&&cd.items)imgs=[...cd.items].filter(i=>i.kind==='file'&&/^image\//.test(i.type)).map(i=>i.getAsFile()).filter(Boolean);if(!cu&&imgs.length){e.preventDefault();insertFiles(imgs);return}
+ if(!cu&&!h){const tx=cd.getData('text/plain');if(tx&&/^\s*([-*+]\s|\d+\.\s|\[[ xX]\])/m.test(tx))h=mdToHtml(tx)}
  if(!cu&&!h)return;e.preventDefault();const frag=clean(cu||h,!!cu);if(!frag.childNodes.length)return;
  const s=getSelection();if(!s.rangeCount)return;const r=s.getRangeAt(0);r.deleteContents();
  const inCell=r.startContainer.nodeType&&(r.startContainer.nodeType===1?r.startContainer:r.startContainer.parentNode).closest('#editor td,#editor th');
