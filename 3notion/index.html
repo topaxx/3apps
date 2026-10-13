@@ -65,6 +65,12 @@ ul.todo li.done{text-decoration:line-through;color:var(--muted)}ul.todo li.done:
 #tmenu button{display:block;width:100%;text-align:left;padding:5px 10px;font-size:13px}#tmenu hr{border:none;border-top:1px solid var(--border);margin:4px 0}
 #tmenu .danger{color:#e03e3e}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#37352f;color:#fff;padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:all .2s;z-index:20}#toast.show{opacity:1;transform:translateX(-50%)}body.dark #toast{background:#e6e6e4;color:#191919}
+mark{border-radius:3px;padding:0 1px;color:inherit}
+mark.hl-yellow{background:#fbf3a5}mark.hl-green{background:#cdeec8}mark.hl-blue{background:#cfe3fb}mark.hl-pink{background:#f8d3e6}mark.hl-orange{background:#fbdcbf}
+body.dark mark.hl-yellow{background:#6b5d12}body.dark mark.hl-green{background:#2e5a32}body.dark mark.hl-blue{background:#28476d}body.dark mark.hl-pink{background:#6b2f4f}body.dark mark.hl-orange{background:#73431c}
+#hlWrap{position:relative;display:inline-flex}#hlDrop{min-width:16px!important;padding:3px 2px}
+#hlMenu{position:absolute;top:100%;left:0;z-index:9;background:var(--bg);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:4px;min-width:170px}
+#hlMenu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 8px;font-size:13px}#hlMenu .sw{width:14px;height:14px;border-radius:3px;border:1px solid var(--border)}#hlMenu button.cur{font-weight:600}
 #empty{color:var(--muted);text-align:center;margin-top:30vh}
 #status{font-size:12px;color:var(--muted);margin-left:8px}
 </style></head><body>
@@ -75,7 +81,7 @@ ul.todo li.done{text-decoration:line-through;color:var(--muted)}ul.todo li.done:
 <button data-c="bold" title="Bold (Ctrl+B)"><b>B</b></button><button data-c="italic" title="Italic (Ctrl+I)"><i>I</i></button><button data-c="underline" title="Underline (Ctrl+U)"><u>U</u></button>
 <button data-b="H1" title="Heading 1 (Ctrl+1 or Ctrl+Shift+1)">H1</button><button data-b="H2" title="Heading 2 (Ctrl+2 or Ctrl+Shift+2)">H2</button><button data-b="H3" title="Heading 3 (Ctrl+3 or Ctrl+Shift+3)">H3</button><button data-b="P" title="Normal text (Ctrl+0 or Ctrl+Shift+0)">¶</button>
 <button data-c="insertUnorderedList" title="Bulleted list (Ctrl+L or Ctrl+Shift+8)">• List</button><button data-c="insertOrderedList" title="Numbered list (Ctrl+Shift+L or Ctrl+Shift+7)">1. List</button>
-<button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
+<button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><span id="hlWrap"><button id="hlBtn" title="Highlight (Ctrl+Shift+H)">🖍 Highlight</button><button id="hlDrop" title="Highlight color">▾</button><div id="hlMenu" hidden></div></span><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
 <select id="moveSel" title="Move to"></select></div>
 <div id="page"><div id="inner"><div id="empty">Select or create a note</div>
 <div id="noteView" hidden><input id="title" placeholder="Untitled"><div id="editor" contenteditable="true" data-ph="Start typing… (tip: # , ## , - , 1. , [] )"></div></div></div></div></main>
@@ -205,7 +211,7 @@ function updateActive(){const sl=getSelection();const inEd=sl.rangeCount&&ed.con
  set('[data-c=bold]',inT('b,strong')||sp('bold')&&!/^H/.test(tag));set('[data-c=italic]',inT('i,em')||sp('italic'));set('[data-c=underline]',inT('u')||sp('underline')&&!inT('a'));
  ['H1','H2','H3'].forEach(t=>set(`[data-b=${t}]`,tag===t));set('[data-b=P]',inEd&&(tag==='P'||tag==='DIV')&&!(el&&el.closest&&el.closest('#editor li')));
  set('[data-c=insertUnorderedList]',q('insertUnorderedList')&&!todoOn);set('[data-c=insertOrderedList]',q('insertOrderedList'));set('#todoBtn',todoOn);
- set('#linkBtn',el&&el.closest&&el.closest('#editor a'))}
+ set('#linkBtn',el&&el.closest&&el.closest('#editor a'));set('#hlBtn',el&&el.closest&&el.closest('#editor mark'))}
 document.addEventListener('selectionchange',updateActive);ed.addEventListener('keyup',updateActive);ed.addEventListener('click',updateActive);
 window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const c=e.code;
  const inEd=ed.contains(document.activeElement)||document.activeElement===ed;
@@ -218,7 +224,7 @@ window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const c=
  else if(!e.shiftKey&&!e.altKey&&/^(Digit|Numpad)[0123]$/.test(c)){setBlock({0:'P',1:'H1',2:'H2',3:'H3'}[c.slice(-1)])}
  else if(!e.altKey&&c==='KeyL'){document.execCommand(e.shiftKey?'insertOrderedList':'insertUnorderedList');ed.oninput()}
  else if(false){if(c==='Digit1'||c==='Numpad1')setBlock('H1');else if(c==='Digit2'||c==='Numpad2')setBlock('H2');else if(c==='Digit3'||c==='Numpad3')setBlock('H3');else if(c==='Digit0'||c==='Numpad0')setBlock('P');else done=false}
- else if(e.shiftKey&&!e.altKey){if(c==='Digit8'){document.execCommand('insertUnorderedList');ed.oninput()}else if(c==='Digit7'){document.execCommand('insertOrderedList');ed.oninput()}else if(c==='Digit9')todo();else done=false}
+ else if(e.shiftKey&&!e.altKey){if(c==='KeyH')toggleHL();else if(c==='Digit8'){document.execCommand('insertUnorderedList');ed.oninput()}else if(c==='Digit7'){document.execCommand('insertOrderedList');ed.oninput()}else if(c==='Digit9')todo();else done=false}
  else if(!e.altKey&&!e.shiftKey){if(c==='KeyB')document.execCommand('bold');else if(c==='KeyI')document.execCommand('italic');else if(c==='KeyU')document.execCommand('underline');else if(c==='KeyK')doLink();else done=false;if(done&&c!=='KeyK')ed.oninput()}
  else done=false;if(done){e.preventDefault();e.stopPropagation();updateActive()}},true);
 
@@ -364,7 +370,37 @@ function applyState(n,st){ed.innerHTML=st.html;ed.querySelectorAll('table').forE
  n.html=st.html;n.updated=Date.now();save();ed.focus();setCaretOff(st.caret);updateActive()}
 function undo(){const n=cur();if(!n)return sideUndo();const h=hist(n);h.kind='';if(!h.past.length)return sideUndo();h.future.push(h.cur);h.cur=h.past.pop();applyState(n,h.cur)}
 function redo(){const n=cur();if(!n)return sideRedo();const h=hist(n);h.kind='';if(!h.future.length)return sideRedo();h.past.push(h.cur);h.cur=h.future.pop();applyState(n,h.cur)}
-const OK={TABLE:1,TBODY:1,TR:1,TH:1,TD:1,COLGROUP:1,COL:1,IMG:1,H1:1,H2:1,H3:1,P:1,B:1,I:1,U:1,UL:1,OL:1,LI:1,A:1,BR:1},MAP={THEAD:'TBODY',TFOOT:'TBODY',STRONG:'B',EM:'I',DIV:'P',H4:'H3',H5:'H3',H6:'H3'};
+
+const HLC=[['yellow','Yellow','#fbf3a5'],['green','Green','#cdeec8'],['blue','Blue','#cfe3fb'],['pink','Pink','#f8d3e6'],['orange','Orange','#fbdcbf']];
+let hlColor=(()=>{try{return localStorage.getItem('3notion-hl')||'yellow'}catch(e){return 'yellow'}})();if(!HLC.some(x=>x[0]===hlColor))hlColor='yellow';
+function edRange(){const s=getSelection();if(!s.rangeCount)return null;const r=s.getRangeAt(0);return ed.contains(r.commonAncestorContainer)||r.commonAncestorContainer===ed?r:null}
+const elOf=n=>n&&(n.nodeType===1?n:n.parentNode);
+function marksIn(r){return [...ed.querySelectorAll('mark')].filter(m=>r.intersectsNode(m))}
+function unwrap(m){const p=m.parentNode;while(m.firstChild)p.insertBefore(m.firstChild,m);m.remove();p.normalize()}
+function textNodesIn(r){const out=[],w=document.createTreeWalker(r.commonAncestorContainer.nodeType===3?r.commonAncestorContainer.parentNode:r.commonAncestorContainer,4);let n;
+ while(n=w.nextNode()){if(r.intersectsNode(n)&&n.textContent.length)out.push(n)}return out}
+function applyHL(color){const r=edRange();if(!r)return;
+ if(r.collapsed){const m=elOf(r.startContainer).closest('#editor mark');if(m){m.className='hl-'+color;finishHL()}return}
+ const ms=marksIn(r);const inner=elOf(r.commonAncestorContainer).closest('#editor mark');
+ if(inner){inner.className='hl-'+color;finishHL();return}
+ const sc=r.startContainer,so=r.startOffset,ec=r.endContainer,eo=r.endOffset;
+ let nodes=textNodesIn(r);const made=[];
+ nodes.forEach(t=>{let st=t===sc?so:0,en=t===ec?eo:t.textContent.length;if(st>=en)return;if(t.parentNode.closest('mark')){t.parentNode.closest('mark').className='hl-'+color;made.push(t.parentNode.closest('mark'));return}
+  if(en<t.textContent.length)t.splitText(en);if(st>0)t=t.splitText(st);if(!t.textContent.trim()&&!/\S/.test(t.textContent)&&t.parentNode.nodeName.match(/^(TR|TBODY|TABLE|UL|OL)$/))return;
+  const m=document.createElement('mark');m.className='hl-'+color;t.before(m);m.appendChild(t);made.push(m)});
+ if(made.length){const nr=document.createRange();nr.setStartBefore(made[0]);nr.setEndAfter(made[made.length-1]);const s=getSelection();s.removeAllRanges();s.addRange(nr)}finishHL()}
+function removeHL(){const r=edRange();if(!r)return;let ms=r.collapsed?[elOf(r.startContainer).closest('#editor mark')].filter(Boolean):marksIn(r);
+ const inner=elOf(r.commonAncestorContainer).closest('#editor mark');if(inner&&!ms.includes(inner))ms.push(inner);if(!ms.length)return;
+ const first=ms[0].firstChild,lastM=ms[ms.length-1],last=lastM.lastChild;ms.forEach(unwrap);finishHL()}
+function toggleHL(){const r=edRange();if(!r)return;const inner=elOf(r.commonAncestorContainer).closest('#editor mark');
+ if(inner||(!r.collapsed&&marksIn(r).length&&textNodesIn(r).every(t=>t.parentNode.closest('mark')||!t.textContent.trim())))removeHL();else applyHL(hlColor)}
+function finishHL(){ed.oninput();updateActive()}
+function hlMenu(){const m=$('#hlMenu');m.innerHTML=HLC.map(c=>`<button data-c="${c[0]}" class="${c[0]===hlColor?'cur':''}"><span class="sw" style="background:${c[2]}"></span>${c[1]}</button>`).join('')+'<button data-rm="1"><span class="sw" style="background:transparent"></span>Remove highlight</button>'}
+$('#hlBtn').onmousedown=e=>{e.preventDefault();toggleHL()};
+$('#hlDrop').onmousedown=e=>{e.preventDefault();const m=$('#hlMenu');if(m.hidden){hlMenu();m.hidden=false}else m.hidden=true};
+$('#hlMenu').onmousedown=e=>{e.preventDefault();const b=e.target.closest('button');if(!b)return;$('#hlMenu').hidden=true;if(b.dataset.rm)removeHL();else{hlColor=b.dataset.c;try{localStorage.setItem('3notion-hl',hlColor)}catch(_){}applyHL(hlColor)}};
+document.addEventListener('mousedown',e=>{if(!e.target.closest('#hlWrap'))$('#hlMenu').hidden=true});
+const OK={MARK:1,TABLE:1,TBODY:1,TR:1,TH:1,TD:1,COLGROUP:1,COL:1,IMG:1,H1:1,H2:1,H3:1,P:1,B:1,I:1,U:1,UL:1,OL:1,LI:1,A:1,BR:1},MAP={THEAD:'TBODY',TFOOT:'TBODY',STRONG:'B',EM:'I',DIV:'P',H4:'H3',H5:'H3',H6:'H3'};
 function clean(html,keep){const t=document.createElement('template');t.innerHTML=html;const out=document.createDocumentFragment();
  const walk=(src,dst)=>{for(const n of [...src.childNodes]){if(n.nodeType===3){dst.appendChild(document.createTextNode(n.textContent));continue}if(n.nodeType!==1)continue;
   if(/^(SCRIPT|STYLE|META|TITLE|HEAD)$/.test(n.nodeName))continue;let tag=MAP[n.nodeName]||n.nodeName;
@@ -372,6 +408,7 @@ function clean(html,keep){const t=document.createElement('template');t.innerHTML
   if(tag==='IMG'){const sr=n.getAttribute('src')||'';if(!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(sr))continue;e.setAttribute('src',sr);const w=parseInt(n.getAttribute('data-w')||n.style.width)||100;e.style.width=Math.min(100,Math.max(10,w))+'%';dst.appendChild(e);continue}
   if(tag==='COL'){const w=parseInt(n.style.width||n.getAttribute('width'));if(w>20)e.style.width=Math.min(1200,w)+'px';dst.appendChild(e);continue}
   if(tag==='TABLE'&&keep){for(const k of ['hrow','hcol'])if(n.getAttribute('data-'+k)==='1')e.setAttribute('data-'+k,'1')}
+  if(tag==='MARK'){const m=(n.className||'').match(/hl-(yellow|green|blue|pink|orange)/);e.className=m?m[0]:'hl-yellow'}
   if(tag==='A'){const h=n.getAttribute('href')||'';if(/^(https?:|mailto:)/i.test(h))e.setAttribute('href',h)}
   if(keep&&/^H/.test(tag)&&n.getAttribute('data-collapsed')==='1')e.dataset.collapsed='1';
   if(tag==='UL'&&n.classList.contains('todo'))e.className='todo';if(tag==='LI'&&n.classList.contains('done'))e.className='done';
