@@ -77,7 +77,7 @@ ul.toggle>li[data-collapsed="1"]::before{content:"▶"}
 ul.toggle>li[data-collapsed="1"]>:is(ul,ol,p,div,table,h1,h2,h3){display:none}
 #empty{color:var(--muted);text-align:center;margin-top:30vh}
 #status{font-size:12px;color:var(--muted);margin-left:8px}
-</style></head><body>
+/*page-frame*/#page{background:#f1f1ef}body.dark #page{background:#111}#inner{background:var(--bg);margin:24px auto 48px;min-height:calc(100% - 72px);box-sizing:border-box;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08)}body.dark #inner{box-shadow:0 1px 6px rgba(0,0,0,.5)}</style></head><body>
 <aside id="side"><header><span>📝 3notion</span><button id="addCat" title="New category">＋ Category</button></header>
 <div id="banner" hidden></div><button id="newNote" title="New note (Alt+N)">＋ New note</button><input id="search" placeholder="Search…"><div id="tree"></div>
 <footer><button id="exp">⬇ Export</button><button id="imp">⬆ Import</button><button id="theme">🌙 Dark</button><input type="file" id="file" accept=".json,application/json" hidden></footer></aside>
