@@ -110,18 +110,41 @@ async function textMask(img) {
     for (let i = 0; i < w * h; i++) for (let c = 0; c < 3; c++) d[c * w * h + i] = (rgb[i * 3 + 2 - c] / 255 - mean[c]) / std[c]; // BGR like PaddleOCR
     const out = await model({ x: new Tensor("float32", d, [1, 3, h, w]) });
     const prob = out[Object.keys(out)[0]].data;
-    boxes = components(prob, w, h, 0.3).filter(c => c.mean > 0.5 && c.area > 12).map(c => {
+    boxes = components(prob, w, h, 0.3).filter(c => c.mean > 0.6 && c.area > 12).map(c => {
       const per = 2 * ((c.x1 - c.x0 + 1) + (c.y1 - c.y0 + 1));
       const dd = c.area * 1.6 / per;     // DB "unclip"
-      return { x0: Math.max(0, (c.x0 - dd) * W / w), y0: Math.max(0, (c.y0 - dd) * H / h), x1: Math.min(W - 1, (c.x1 + 1 + dd) * W / w), y1: Math.min(H - 1, (c.y1 + 1 + dd) * H / h) };
+      return { x0: Math.max(0, (c.x0 - dd) * W / w), y0: Math.max(0, (c.y0 - dd) * H / h), x1: Math.min(W - 1, (c.x1 + 1 + dd) * W / w), y1: Math.min(H - 1, (c.y1 + 1 + dd) * H / h), score: c.mean };
     }).filter(b => (b.x1 - b.x0) > 4 && (b.y1 - b.y0) > 3);
   } catch (e) {
     progress("text", { phase: "fallback", note: String(e && e.message || e) });
-    boxes = heuristicBoxes(img);
+    boxes = heuristicBoxes(img).map(b => ({ ...b, score: 0.7 }));
   }
-  const mask = new Uint8Array(n);
-  for (const b of boxes) glyphs(img, b, mask);
-  return { mask, boxes };
+  // merge overlapping boxes into regions (one line of text = one region)
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let a = 0; a < boxes.length && !merged; a++) for (let b = a + 1; b < boxes.length; b++) {
+      const A = boxes[a], B = boxes[b];
+      if (A.x0 <= B.x1 && B.x0 <= A.x1 && A.y0 <= B.y1 && B.y0 <= A.y1) {
+        boxes[a] = { x0: Math.min(A.x0, B.x0), y0: Math.min(A.y0, B.y0), x1: Math.max(A.x1, B.x1), y1: Math.max(A.y1, B.y1), score: Math.max(A.score, B.score) };
+        boxes.splice(b, 1); merged = true; break;
+      }
+    }
+  }
+  // tighten: drop tiny, very tall/narrow and weak isolated detections (porch railings, chins, shirt dots…)
+  const bArea = b => (b.x1 - b.x0) * (b.y1 - b.y0);
+  boxes = boxes.filter(b => bArea(b) >= n * 0.0006 && !((b.y1 - b.y0) > 2 * (b.x1 - b.x0)));
+  const maxA = Math.max(0, ...boxes.map(bArea));
+  boxes = boxes.filter(b => !(bArea(b) < maxA * 0.12 && b.score < 0.8));
+  const mask = new Uint8Array(n), regions = [];
+  for (const b of boxes) {
+    const m = new Uint8Array(n); glyphs(img, b, m);
+    let cnt = 0; for (let i = 0; i < n; i++) if (m[i]) cnt++;
+    if (cnt < Math.max(25, n * 0.00015)) continue;
+    for (let i = 0; i < n; i++) if (m[i]) mask[i] = 255;
+    regions.push({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, score: b.score, mask: m });
+  }
+  return { mask, boxes: regions.map(({ mask, ...b }) => b), regions };
 }
 
 function components(prob, w, h, thr) {
@@ -221,10 +244,10 @@ async function subjectRefine(img, key, sal, text, hint) {
   dbg.comps = comps.map(c => [c.area / n, c.px, c.py]);
   let pts = [], labels = [], fromHint = false;
   if (comps.length) {
-    // positive: most salient point near the core centroid
-    cx /= cn; cy /= cn; let best = -1, bd = 1e18;
-    for (let i = 0; i < n; i++) if (sal[i] > 204) { const d = (i % W - cx) ** 2 + (((i / W) | 0) - cy) ** 2; if (d < bd) { bd = d; best = i; } }
-    pts.push([best % W, (best / W) | 0]); labels.push(1);
+    // positive: the innermost point of each large confident region (a centroid can fall between two people)
+    const core = new Uint8Array(n); for (let i = 0; i < n; i++) core[i] = sal[i] > 204 && !inText[i] ? 1 : 0;
+    const cc = components(core, W, H, 0.5).filter(c => c.area > n * 0.01).sort((a, b) => b.area - a.area).slice(0, 3);
+    for (const c of cc) pts.push(innermost(core, W, H, c)), labels.push(1);
     for (const c of comps) { pts.push([c.px, c.py]); labels.push(1); }
     for (const b of text.boxes) { pts.push([(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2]); labels.push(0); }
   } else if (hint && hint.pts.length) { pts = hint.pts; labels = hint.labels; fromHint = true; } // same points as before enhancing
@@ -242,6 +265,13 @@ async function subjectRefine(img, key, sal, text, hint) {
   const m = new Uint8Array(n); let a = 0;
   for (let i = 0; i < n; i++) if (masks[0].data[bk * n + i] && (fromHint || sal[i] > 20) && !text.mask[i]) { m[i] = 255; a++; }
   dbg.sam = a / n; dbg.pts = pts; return a > n * 0.01 && a < n * 0.9 ? m : null;
+}
+function innermost(bin, W, H, c) { // pixel of the component farthest from its border (cheap chamfer pass inside the bbox)
+  const w = c.x1 - c.x0 + 1, h = c.y1 - c.y0 + 1, d = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const on = bin[(y + c.y0) * W + x + c.x0]; d[y * w + x] = on ? Math.min(x ? d[y * w + x - 1] + 1 : 1, y ? d[(y - 1) * w + x] + 1 : 1) : 0; }
+  let best = 0, bi = 0;
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) { const i = y * w + x; if (!d[i]) continue; d[i] = Math.min(d[i], x < w - 1 ? d[i + 1] + 1 : 1, y < h - 1 ? d[i + w] + 1 : 1); if (d[i] > best) { best = d[i]; bi = i; } }
+  return [c.x0 + bi % w, c.y0 + ((bi / w) | 0)];
 }
 function densityF(a, W, H, r) { // local fraction of "on" pixels (box filter)
   const I = new Float64Array((W + 1) * (H + 1));
@@ -306,7 +336,7 @@ self.onmessage = async ({ data: m }) => {
       const text = await textMask(img);
       let subj = null;
       lastPts = null; try { subj = await subjectRefine(img, m.key, sal, text, m.hint); } catch (e) { console.warn("subject refine failed", e); }
-      const tr = [sal.buffer, text.mask.buffer, ...things.map(t => t.mask.buffer)]; if (subj) tr.push(subj.buffer);
+      const tr = [sal.buffer, text.mask.buffer, ...text.regions.map(r => r.mask.buffer), ...things.map(t => t.mask.buffer)]; if (subj) tr.push(subj.buffer);
       post({ type: "result", job: m.job, sal, subj, subjPts: subj ? lastPts : null, things, text, warn: tErr, dbg }, tr);
     } else if (m.type === "sam") {
       const mask = await samClick(m.img, m.key, m.x, m.y);

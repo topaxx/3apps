@@ -58,9 +58,28 @@ input[type=color]{width:2.2rem;height:1.8rem;padding:0;border:1px solid var(--bo
 .pane h3 .sp{flex:1}
 .view{flex:1;min-height:0;border-radius:14px;background:var(--card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;padding:12px}
 .view canvas{max-width:100%;max-height:100%;display:block;image-rendering:auto}
+#srcView{overflow:hidden}
+#stage{position:relative;flex-shrink:0;transform-origin:0 0;will-change:transform}
+#stage canvas{width:100%;height:100%;max-width:none;max-height:none;touch-action:none}
+#ovSvg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
 #srcView canvas{cursor:pointer}
-#srcView.add canvas{cursor:copy}
-#srcView.rem canvas{cursor:not-allowed}
+#srcView[data-tool=brush] canvas{cursor:none}
+#srcView[data-tool=lasso] canvas,#srcView[data-tool=wand] canvas,#srcView[data-tool=ai] canvas{cursor:crosshair}
+#srcView.panning canvas{cursor:grab!important}
+.viewbar{display:flex;align-items:center;gap:.35rem;font-size:.8rem;color:var(--muted);flex-wrap:wrap}
+.viewbar button{padding:.1rem .5rem;font-size:.8rem}
+.viewbar input[type=range]{flex:0 0 90px}
+.editbox{display:flex;flex-direction:column;gap:.45rem;border:1px solid var(--border);border-radius:12px;padding:.55rem;background:var(--bg)}
+.seg.two button{flex:1}
+.row .v{min-width:3.2rem;text-align:right;flex-shrink:0}
+.row.sl{flex-wrap:nowrap}
+.sl>label{flex:0 0 5.4rem}
+.sl>input[type=range]{flex:1;min-width:0}
+.row select{flex:1;min-width:0;padding:.3rem .5rem;font-size:.85rem}
+#elList li.child{margin-left:1.1rem}
+#elList li.grp{background:transparent}
+#elList li.active{border-color:#22c55e;box-shadow:0 0 0 2px #22c55e66}
+#elList li canvas.th{height:20px;width:auto;max-width:64px;border-radius:4px;border:1px solid var(--border);flex-shrink:0}
 .checker{background-color:#fff;background-image:linear-gradient(45deg,#d4d4d8 25%,transparent 25%),linear-gradient(-45deg,#d4d4d8 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#d4d4d8 75%),linear-gradient(-45deg,transparent 75%,#d4d4d8 75%);background-size:20px 20px;background-position:0 0,0 10px,10px -10px,-10px 0}
 @media (prefers-color-scheme:dark){.checker{background-color:#3f3f46;background-image:linear-gradient(45deg,#27272a 25%,transparent 25%),linear-gradient(-45deg,#27272a 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#27272a 75%),linear-gradient(-45deg,transparent 75%,#27272a 75%)}}
 #tip{position:absolute;pointer-events:none;background:var(--text);color:var(--bg);font-size:.78rem;padding:.15rem .45rem;border-radius:6px;display:none;white-space:nowrap;z-index:3}
@@ -92,13 +111,30 @@ input[type=color]{width:2.2rem;height:1.8rem;padding:0;border:1px solid var(--bo
   <div class="empty-els" id="elEmpty">Open an image — 3sticker finds the people, animals, objects, text and background so you can pick what goes into the sticker.</div>
   <div class="row" id="elActs" hidden><button id="allBtn">All</button><button id="noneBtn">None</button><span class="hint">Hover to highlight, click to toggle.</span></div>
 
-  <h2>Refine (click the image)</h2>
+  <label class="opt"><input type="checkbox" id="textFull" checked> Text on clothing keeps its full pixels</label>
+
+  <h2>Edit selection</h2>
   <div class="seg" id="toolSeg">
-    <button data-tool="select" class="on" title="Click an area to toggle that element">Select</button>
-    <button data-tool="add" title="Click any part to add it as a new element (AI)">+ Add area</button>
-    <button data-tool="rem" title="Click any part to cut it out of the sticker (AI)">− Remove area</button>
+    <button data-tool="select" class="on" title="Click an element on the image to toggle it">Select</button>
+    <button data-tool="brush" title="Paint the mask (B)">Brush</button>
+    <button data-tool="lasso" title="Draw around an area (L)">Lasso</button>
+    <button data-tool="wand" title="Click a region of similar colour (W)">Wand</button>
+    <button data-tool="ai" title="AI selects the clicked part">AI click</button>
   </div>
+  <div id="editOpts" class="editbox" hidden>
+    <div class="seg two" id="modeSeg"><button data-mode="add" class="on">＋ Add</button><button data-mode="erase">－ Erase</button></div>
+    <div class="row sl"><label for="target">Apply to</label><select id="target"></select></div>
+    <div class="row sl" data-for="brush"><label for="brSize">Size</label><input type="range" id="brSize" min="1" max="200" value="20"><span class="hint v" id="brSizeV">20 px</span></div>
+    <div class="row sl" data-for="brush"><label for="brHard">Hardness</label><input type="range" id="brHard" min="0" max="100" value="60"><span class="hint v" id="brHardV">60%</span></div>
+    <label class="opt" data-for="brush"><input type="checkbox" id="brSmart" checked> Edge-aware (snaps to colour edges)</label>
+    <div class="row sl" data-for="brush wand"><label for="tol">Tolerance</label><input type="range" id="tol" min="1" max="100" value="25"><span class="hint v" id="tolV">25</span></div>
+  </div>
+  <p class="hint">Wheel = zoom · Space+drag = pan · Alt = flip Add/Erase</p>
   <p class="hint" id="toolHint">Click an element on the image to toggle it.</p>
+  <div class="row sl"><label for="grow">Grow/Shrink</label><input type="range" id="grow" min="-10" max="10" value="0"><span class="hint v" id="growV">0 px</span></div>
+  <div class="row sl"><label for="feather">Feather</label><input type="range" id="feather" min="0" max="10" value="0"><span class="hint v" id="featherV">0 px</span></div>
+  <p class="hint">Grow/Feather apply to: <b id="adjFor">whole sticker</b></p>
+  <div class="row"><button id="undoBtn" disabled title="Undo (Ctrl+Z)">↶ Undo</button><button id="redoBtn" disabled title="Redo (Ctrl+Y)">↷ Redo</button></div>
 
   <h2>Enhance</h2>
   <div class="row">
@@ -130,7 +166,8 @@ input[type=color]{width:2.2rem;height:1.8rem;padding:0;border:1px solid var(--bo
   <div id="status" role="status"><div class="msg"><span id="stTxt"></span><div class="bar" id="stBar"><i></i></div></div><button id="stCancel" hidden>Cancel</button><button id="stClose" hidden>✕</button></div>
   <div class="panes">
     <section class="pane"><h3>Image <span class="sp"></span><span id="imgInfo" style="text-transform:none;letter-spacing:0"></span></h3>
-      <div class="view" id="srcView"><canvas id="srcCanvas" width="10" height="10" aria-label="Image with element overlays"></canvas><div id="tip"></div></div></section>
+      <div class="viewbar"><button id="zOut" title="Zoom out">−</button><span id="zVal">100%</span><button id="zIn" title="Zoom in">+</button><button id="zFit">Fit</button><span class="sp"></span><label for="ovOp" title="Overlay opacity">Overlay</label><input type="range" id="ovOp" min="0" max="100" value="100"></div>
+      <div class="view" id="srcView"><div id="stage"><canvas id="srcCanvas" width="10" height="10" aria-label="Image with element overlays"></canvas><svg id="ovSvg" viewBox="0 0 10 10" preserveAspectRatio="none"><polyline id="lassoPath" fill="rgba(34,197,94,.12)" stroke="#22c55e" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" points=""/><circle id="brCursor" fill="none" stroke="#22c55e" style="display:none"/></svg></div><div id="tip"></div></div></section>
     <section class="pane"><h3>Sticker preview <span class="sp"></span><span id="outInfo" style="text-transform:none;letter-spacing:0"></span></h3>
       <div class="view checker" id="outView"><canvas id="outCanvas" width="10" height="10" aria-label="Sticker preview"></canvas><div class="placeholder" id="outPh" hidden></div></div></section>
   </div>
