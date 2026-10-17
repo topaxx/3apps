@@ -443,11 +443,37 @@ function mdToHtml(tx){const lines=tx.replace(/\r/g,'').split('\n');let out='',st
   if(!line){continue}close(0);const h=line.match(/^(#{1,3})\s+(.*)$/);out+=h?`<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`:'<p>'+esc(line)+'</p>'}
  close(0);return out}
 function listItem(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return null;const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentNode;if(el.closest('td,th'))return null;return el.closest('#editor li')}
-ed.addEventListener('keydown',e=>{if(e.key!=='Tab'||e.ctrlKey||e.altKey||e.metaKey)return;const li=listItem();if(!li)return;e.preventDefault();const off=caretOff();const ul=li.parentNode;
- if(!e.shiftKey){const prev=li.previousElementSibling;if(!prev||prev.nodeName!=='LI')return;let sub=[...prev.children].reverse().find(x=>/^(UL|OL)$/.test(x.nodeName));
-  if(!sub){sub=document.createElement(ul.nodeName);if(ul.className)sub.className=ul.className;prev.appendChild(sub);if(ul.classList.contains('toggle'))prev.removeAttribute('data-collapsed')}sub.appendChild(li)}
- else{const pli=ul.parentNode;if(!pli||pli.nodeName!=='LI')return;const after=[...ul.children].slice([...ul.children].indexOf(li)+1);pli.after(li);if(after.length){const nu=document.createElement(ul.nodeName);if(ul.className)nu.className=ul.className;after.forEach(x=>nu.appendChild(x));li.appendChild(nu)}if(!ul.children.length)ul.remove()}
- setCaretOff(off);ed.oninput();updateActive()});
+// list & toggle keys (capture phase so Firefox can't take them)
+const isList=x=>!!x&&(x.nodeName==='UL'||x.nodeName==='OL');
+const tglLi=x=>!!x&&x.nodeName==='LI'&&!!x.parentNode&&!!x.parentNode.classList&&x.parentNode.classList.contains('toggle');
+const blkEmpty=b=>!b.querySelector('ul,ol,img,table,p,div,h1,h2,h3')&&!b.textContent.replace(/[\s\u200b\ufeff]/g,'');
+function mkList(like){const l=document.createElement(like.nodeName);if(like.className)l.className=like.className;return l}
+function caretIn(el){const r=document.createRange();r.setStart(el,0);r.collapse(true);const s=getSelection();s.removeAllRanges();s.addRange(r)}
+function newToggleAfter(t){const li=document.createElement('li');li.innerHTML='<br>';t.after(li);return li}
+function splitAfter(list,item,node){const rest=[];let x=item.nextElementSibling;while(x){rest.push(x);x=x.nextElementSibling}list.after(node);if(rest.length){const r=mkList(list);rest.forEach(y=>r.appendChild(y));node.after(r)}}
+function outdentLi(li){const ul=li.parentNode,pli=ul.parentNode;if(!pli||pli.nodeName!=='LI')return false;const after=[...ul.children].slice([...ul.children].indexOf(li)+1);
+ if(after.length){const nu=mkList(ul);after.forEach(x=>nu.appendChild(x));li.appendChild(nu)}const outer=pli.parentNode;
+ if(outer.nodeName===ul.nodeName&&outer.className===ul.className)pli.after(li);else{const nl=mkList(ul);nl.appendChild(li);splitAfter(outer,pli,nl)}
+ if(!ul.children.length)ul.remove();return true}
+function indentLi(li){const ul=li.parentNode,prev=li.previousElementSibling;if(!prev||prev.nodeName!=='LI')return false;let sub=prev.lastElementChild;
+ if(!(isList(sub)&&sub.nodeName===ul.nodeName&&sub.className===ul.className)){sub=mkList(ul);prev.appendChild(sub)}if(tglLi(prev))prev.removeAttribute('data-collapsed');sub.appendChild(li);return true}
+function liToP(li){const ul=li.parentNode,p=document.createElement('p');p.innerHTML='<br>';splitAfter(ul,li,p);li.remove();if(!ul.children.length)ul.remove();return p}
+function listCtx(){const s=getSelection();if(!s.rangeCount||document.activeElement!==ed||!ed.contains(s.anchorNode))return null;const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentNode;
+ if(el.closest('td,th'))return null;const li=el.closest('#editor li');if(!li)return null;let blk=el;while(blk&&blk.parentNode!==li)blk=blk.parentNode;
+ if(blk&&blk.nodeType===1&&/^(P|DIV|H1|H2|H3)$/.test(blk.nodeName)&&tglLi(li))return {kind:'body',blk,T:li};
+ const ul=li.parentNode,pli=ul.parentNode&&ul.parentNode.nodeName==='LI'?ul.parentNode:null;return {kind:'li',li,ul,pli,T:pli&&tglLi(pli)?pli:null}}
+window.addEventListener('keydown',e=>{if(e.ctrlKey||e.altKey||e.metaKey||e.isComposing||(e.key!=='Enter'&&e.key!=='Tab'))return;const s=getSelection();if(e.key==='Enter'&&s.rangeCount&&!s.isCollapsed)return;
+ const c=listCtx();if(!c)return;const go=()=>{e.preventDefault();e.stopPropagation()};const fin=el=>{if(el)caretIn(el);recompute();ed.oninput();updateActive()};
+ if(e.key==='Enter'){
+  if(c.kind==='body'){if(e.shiftKey){go();fin(newToggleAfter(c.T))}else if(blkEmpty(c.blk)&&!c.blk.nextElementSibling){go();c.blk.remove();fin(newToggleAfter(c.T))}return}
+  const {li,ul,pli,T}=c;
+  if(e.shiftKey){if(tglLi(li)){go();fin(newToggleAfter(li))}else if(T){go();fin(newToggleAfter(T))}return}
+  if(!blkEmpty(li))return;go();
+  if(T){li.remove();if(!ul.children.length)ul.remove();fin(newToggleAfter(T))}else if(pli){outdentLi(li);fin(li)}else fin(liToP(li));return}
+ go();const off=caretOff();let ok=false,target=null;
+ if(c.kind==='body'){if(e.shiftKey){splitAfter(c.T.parentNode,c.T,c.blk);ok=true;if(blkEmpty(c.blk))target=c.blk}}
+ else{ok=e.shiftKey?outdentLi(c.li):indentLi(c.li);if(blkEmpty(c.li))target=c.li}
+ if(!ok)return;if(target)caretIn(target);else setCaretOff(off);fin(null)},true);
 
 const TC=[['gray','Gray','#e3e2e0','#474c50'],['brown','Brown','#eee0da','#5c4b43'],['orange','Orange','#fadec9','#6b4a2f'],['yellow','Yellow','#fdecc8','#6b5a2a'],['green','Green','#dbeddb','#2f5240'],['blue','Blue','#d3e5ef','#284a63'],['purple','Purple','#e8deee','#493b5e'],['pink','Pink','#f5e0e9','#5c3449']];
 function isDark(){return document.body.classList.contains('dark')}
