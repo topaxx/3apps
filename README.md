@@ -7,6 +7,7 @@ A tiny static landing site hosting Tom's small self-made web apps. No build step
 index.html          landing page (project list lives in the PROJECTS array)
 assets/             card images (screenshots)
 3notion/index.html  3notion — Notion-like offline notes app
+3sticker/           3sticker — image → sticker maker (on-device AI, models self-hosted in 3sticker/models)
 ```
 
 ## Add a project
