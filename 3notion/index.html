@@ -73,7 +73,7 @@ body.dark mark.hl-yellow{background:#6b5d12}body.dark mark.hl-green{background:#
 #hlMenu button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 8px;font-size:13px}#hlMenu .sw{width:14px;height:14px;border-radius:3px;border:1px solid var(--border)}#hlMenu button.cur{font-weight:600}
 ul.toggle{list-style:none;padding-left:4px}ul.toggle>li{position:relative;padding-left:24px}
 ul.toggle>li::before{content:"▼";position:absolute;left:2px;top:.35em;font-size:.7em;color:var(--muted);cursor:pointer;width:16px;text-align:center}
-ul.toggle>li[data-collapsed="1"]::before{content:"▶"}
+ul.toggle>li[data-collapsed="1"]::before{content:"▶"}ul.toggle>li.tph::after{content:"Group name";position:absolute;left:24px;top:0;color:var(--muted);pointer-events:none;opacity:.8}
 ul.toggle>li[data-collapsed="1"]>:is(ul,ol,p,div,table,h1,h2,h3){display:none}
 #editor td.tc-gray,#editor th.tc-gray{background:#e3e2e0}body.dark #editor td.tc-gray,body.dark #editor th.tc-gray{background:#474c50}#editor td.tc-brown,#editor th.tc-brown{background:#eee0da}body.dark #editor td.tc-brown,body.dark #editor th.tc-brown{background:#5c4b43}#editor td.tc-orange,#editor th.tc-orange{background:#fadec9}body.dark #editor td.tc-orange,body.dark #editor th.tc-orange{background:#6b4a2f}#editor td.tc-yellow,#editor th.tc-yellow{background:#fdecc8}body.dark #editor td.tc-yellow,body.dark #editor th.tc-yellow{background:#6b5a2a}#editor td.tc-green,#editor th.tc-green{background:#dbeddb}body.dark #editor td.tc-green,body.dark #editor th.tc-green{background:#2f5240}#editor td.tc-blue,#editor th.tc-blue{background:#d3e5ef}body.dark #editor td.tc-blue,body.dark #editor th.tc-blue{background:#284a63}#editor td.tc-purple,#editor th.tc-purple{background:#e8deee}body.dark #editor td.tc-purple,body.dark #editor th.tc-purple{background:#493b5e}#editor td.tc-pink,#editor th.tc-pink{background:#f5e0e9}body.dark #editor td.tc-pink,body.dark #editor th.tc-pink{background:#5c3449}
 #editor td.csel,#editor th.csel{box-shadow:inset 0 0 0 2px var(--accent);background-image:linear-gradient(color-mix(in srgb,var(--accent) 14%,transparent),color-mix(in srgb,var(--accent) 14%,transparent))}
@@ -98,7 +98,7 @@ ul.toggle>li[data-collapsed="1"]>:is(ul,ol,p,div,table,h1,h2,h3){display:none}
 <button data-c="bold" title="Bold (Ctrl+B)"><b>B</b></button><button data-c="italic" title="Italic (Ctrl+I)"><i>I</i></button><button data-c="underline" title="Underline (Ctrl+U)"><u>U</u></button>
 <button data-b="H1" title="Heading 1 (Ctrl+1 or Ctrl+Shift+1)">H1</button><button data-b="H2" title="Heading 2 (Ctrl+2 or Ctrl+Shift+2)">H2</button><button data-b="H3" title="Heading 3 (Ctrl+3 or Ctrl+Shift+3)">H3</button><button data-b="P" title="Normal text (Ctrl+0 or Ctrl+Shift+0)">¶</button>
 <button data-c="insertUnorderedList" title="Bulleted list (Ctrl+L or Ctrl+Shift+8)">• List</button><button data-c="insertOrderedList" title="Numbered list (Ctrl+Shift+L or Ctrl+Shift+7)">1. List</button>
-<button id="toggleBtn" title="Toggle list (type &quot;&gt; &quot; at line start)">▸ Toggle</button><button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><span id="hlWrap"><button id="hlBtn" title="Highlight (Ctrl+Shift+H)">🖍 Highlight</button><button id="hlDrop" title="Highlight color">▾</button><div id="hlMenu" hidden></div></span><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
+<button id="toggleBtn" title="Toggle list (type &quot;&gt; &quot; at line start). Ctrl+G groups the selected lines into a toggle, Ctrl+Shift+G ungroups">▸ Toggle</button><button id="todoBtn" title="To-do list (Ctrl+Shift+9)">☑ To-do</button><button id="imgBtn" title="Insert image (or paste/drag an image)">🖼 Image</button><input type="file" id="imgFile" accept="image/*" multiple hidden><button id="tblBtn" title="Insert table (3×3)">▦ Table</button><span id="hlWrap"><button id="hlBtn" title="Highlight (Ctrl+Shift+H)">🖍 Highlight</button><button id="hlDrop" title="Highlight color">▾</button><div id="hlMenu" hidden></div></span><button id="linkBtn" title="Insert link (Ctrl+K)">🔗 Link</button><span id="status"></span>
 <select id="moveSel" title="Move to"></select></div>
 <div id="page"><div id="inner"><div id="empty">Select or create a note</div>
 <div id="noteView" hidden><input id="title" placeholder="Untitled"><div id="editor" contenteditable="true" data-ph="Start typing… (tip: # , ## , - , 1. , [] )"></div></div></div></div></main>
@@ -213,7 +213,9 @@ document.execCommand('defaultParagraphSeparator',false,'p');
 ed.addEventListener('focus',()=>{if(!ed.innerHTML.trim()){ed.innerHTML='<p><br></p>';const r=document.createRange();r.setStart(ed.firstChild,0);getSelection().removeAllRanges();getSelection().addRange(r)}});
 
 const HL=el=>el&&el.nodeType===1&&/^H[1-3]$/.test(el.nodeName)?+el.nodeName[1]:0;
-function recompute(){let hide=0;for(const c of [...ed.children]){const l=HL(c);if(hide&&l&&l<=hide)hide=0;c.classList.toggle('hbt',hide>0);if(!l&&c.dataset&&c.dataset.collapsed)c.removeAttribute('data-collapsed');if(!c.classList.length)c.removeAttribute('class');if(!hide&&l&&c.dataset.collapsed==='1')hide=l}}
+function recompute(){let hide=0;for(const c of [...ed.children]){const l=HL(c);if(hide&&l&&l<=hide)hide=0;c.classList.toggle('hbt',hide>0);if(!l&&c.dataset&&c.dataset.collapsed)c.removeAttribute('data-collapsed');if(!c.classList.length)c.removeAttribute('class');if(!hide&&l&&c.dataset.collapsed==='1')hide=l}tphUpd()}
+function isBlkN(x){return !!x&&x.nodeType===1&&/^(P|DIV|H1|H2|H3|UL|OL|TABLE|BLOCKQUOTE|PRE)$/.test(x.nodeName)}
+function tphUpd(){ed.querySelectorAll('ul.toggle>li').forEach(li=>{const own=[...li.childNodes].filter(n=>!isBlkN(n)).map(n=>n.textContent).join('').replace(/[\s\u200b\ufeff]/g,'');const body=[...li.children].some(isBlkN);li.classList.toggle('tph',!own&&body&&!li.querySelector(':scope>img'));if(!li.classList.length)li.removeAttribute('class')})}
 function blockOf(nd){while(nd&&nd.parentNode!==ed)nd=nd.parentNode;return nd}
 ed.addEventListener('mousedown',e=>{const h=e.target.closest&&e.target.closest('h1,h2,h3');if(h&&h.parentNode===ed&&e.offsetX<0){e.preventDefault();
  if(h.dataset.collapsed==='1')h.removeAttribute('data-collapsed');else{h.dataset.collapsed='1';const r=document.createRange();r.selectNodeContents(h);r.collapse(false);const sl=getSelection();sl.removeAllRanges();sl.addRange(r)}recompute();ed.oninput()}});
@@ -244,6 +246,7 @@ window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey))return;const c=
  else if(!e.shiftKey&&!e.altKey&&/^(Digit|Numpad)[0123]$/.test(c)){setBlock({0:'P',1:'H1',2:'H2',3:'H3'}[c.slice(-1)])}
  else if(!e.altKey&&c==='KeyL'){document.execCommand(e.shiftKey?'insertOrderedList':'insertUnorderedList');ed.oninput()}
  else if(false){if(c==='Digit1'||c==='Numpad1')setBlock('H1');else if(c==='Digit2'||c==='Numpad2')setBlock('H2');else if(c==='Digit3'||c==='Numpad3')setBlock('H3');else if(c==='Digit0'||c==='Numpad0')setBlock('P');else done=false}
+ else if(!e.altKey&&c==='KeyG'){if(e.shiftKey)ungroupSel();else groupSel()}
  else if(e.shiftKey&&!e.altKey){if(c==='KeyH')toggleHL();else if(c==='Digit8'){document.execCommand('insertUnorderedList');ed.oninput()}else if(c==='Digit7'){document.execCommand('insertOrderedList');ed.oninput()}else if(c==='Digit9')todo();else done=false}
  else if(!e.altKey&&!e.shiftKey){if(c==='KeyB')document.execCommand('bold');else if(c==='KeyI')document.execCommand('italic');else if(c==='KeyU')document.execCommand('underline');else if(c==='KeyK')doLink();else done=false;if(done&&c!=='KeyK')ed.oninput()}
  else done=false;if(done){e.preventDefault();e.stopPropagation();updateActive()}},true);
@@ -443,6 +446,36 @@ function mdToHtml(tx){const lines=tx.replace(/\r/g,'').split('\n');let out='',st
   if(!line){continue}close(0);const h=line.match(/^(#{1,3})\s+(.*)$/);out+=h?`<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`:'<p>'+esc(line)+'</p>'}
  close(0);return out}
 function listItem(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return null;const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentNode;if(el.closest('td,th'))return null;return el.closest('#editor li')}
+// group selection into a toggle (Ctrl+G) / ungroup (Ctrl+Shift+G)
+function kidAt(P,node,off,end){if(node===P){const k=end?P.childNodes[off-1]:P.childNodes[off];return k||(end?P.lastChild:P.firstChild)}while(node&&node.parentNode!==P)node=node.parentNode;return node}
+function elKid(k,end){while(k&&k.nodeType!==1)k=end?k.previousSibling:k.nextSibling;return k}
+function mergeLists(a,b){if(a&&b&&isList(a)&&isList(b)&&a.nodeName===b.nodeName&&a.className===b.className){while(b.firstChild)a.appendChild(b.firstChild);b.remove();return true}return false}
+function newGroupLi(){const tg=document.createElement('ul');tg.className='toggle';const tli=document.createElement('li');tli.innerHTML='<br>';tg.appendChild(tli);return [tg,tli]}
+function groupSel(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return;const r=s.getRangeAt(0).cloneRange();
+ if(!r.collapsed&&r.endOffset===0){const eb=elOf(r.endContainer).closest('li,p,div,h1,h2,h3');if(eb&&eb!==ed&&ed.contains(eb)&&!eb.contains(r.startContainer)){const t=document.createRange();t.setStart(eb,0);t.setEnd(r.endContainer,0);if(!t.toString())r.setEndBefore(eb)}}
+ const sN=r.startContainer,sO=r.startOffset,eN=r.endContainer,eO=r.endOffset;let P=elOf(r.commonAncestorContainer);
+ while(P!==ed&&!/^(UL|OL|LI)$/.test(P.nodeName))P=P.parentNode;if(P!==ed&&P.closest('td,th'))P=ed;
+ let L=null,a,b,C=null,ca,cb;
+ if(P.nodeName==='LI'){ca=kidAt(P,sN,sO,false);cb=kidAt(P,eN,eO,true);if(isBlkN(ca)&&isBlkN(cb)){C=P}else{L=P.parentNode;a=b=P}}
+ else if(isList(P)){L=P;a=elKid(kidAt(P,sN,sO,false),false);b=elKid(kidAt(P,eN,eO,true),true)}
+ else{C=ed;ca=elKid(kidAt(ed,sN,sO,false),false);cb=elKid(kidAt(ed,eN,eO,true),true)}
+ const [tg,tli]=newGroupLi();
+ if(L){if(!a||!b||a.nodeName!=='LI'||b.nodeName!=='LI')return;const sel=[];for(let x=a;x;x=x.nextSibling){sel.push(x);if(x===b)break}const after=[];for(let x=b.nextSibling;x;x=x.nextSibling)after.push(x);
+  const nl=mkList(L);sel.forEach(x=>nl.appendChild(x));tli.appendChild(nl);L.after(tg);if(after.some(x=>x.nodeType===1)){const A=mkList(L);after.forEach(x=>A.appendChild(x));tg.after(A)}if(!L.querySelector(':scope>li'))L.remove()}
+ else{if(!ca||!cb)return;
+  if(isList(ca)&&ca.contains(sN)){const li=elKid(kidAt(ca,sN,sO,false),false);if(li&&li.parentNode===ca&&li.previousElementSibling){const pre=mkList(ca);while(ca.firstChild!==li)pre.appendChild(ca.firstChild);ca.before(pre)}}
+  if(isList(cb)&&cb.contains(eN)){const li=elKid(kidAt(cb,eN,eO,true),true);if(li&&li.parentNode===cb&&li.nextElementSibling){const post=mkList(cb);while(li.nextSibling)post.appendChild(li.nextSibling);cb.after(post)}}
+  const units=[];for(let x=ca;x;x=x.nextSibling){units.push(x);if(x===cb)break}ca.before(tg);units.forEach(u=>tli.appendChild(u))}
+ caretIn(tli);recompute();ed.oninput();updateActive()}
+function ungroupSel(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return;let T=elOf(s.anchorNode).closest('li');while(T&&!tglLi(T))T=T.parentNode.closest('li');if(!T||!ed.contains(T))return;
+ const L=T.parentNode,off=caretOff();const title=[...T.childNodes].filter(n=>!isBlkN(n)),items=[];
+ if(title.map(n=>n.textContent).join('').replace(/[\s\u200b\ufeff]/g,'')){const p=document.createElement('p');title.forEach(n=>p.appendChild(n));items.push(p)}
+ [...T.childNodes].filter(isBlkN).forEach(n=>items.push(n));
+ if(!items.length){T.remove();if(!L.querySelector(':scope>li'))L.remove()}
+ else{const after=[];for(let x=T.nextSibling;x;x=x.nextSibling)after.push(x);T.remove();let ref=L;items.forEach(n=>{ref.after(n);ref=n});
+  if(after.some(x=>x.nodeType===1)){const A=mkList(L);after.forEach(x=>A.appendChild(x));ref.after(A)}if(!L.querySelector(':scope>li'))L.remove();
+  let f=items[0],l=items[items.length-1];const pv=f.previousElementSibling;if(mergeLists(pv,f)){if(l===f)l=pv}mergeLists(l,l.nextElementSibling)}
+ recompute();setCaretOff(off);ed.oninput();updateActive()}
 // list & toggle keys (capture phase so Firefox can't take them)
 const isList=x=>!!x&&(x.nodeName==='UL'||x.nodeName==='OL');
 const tglLi=x=>!!x&&x.nodeName==='LI'&&!!x.parentNode&&!!x.parentNode.classList&&x.parentNode.classList.contains('toggle');
@@ -462,12 +495,16 @@ function listCtx(){const s=getSelection();if(!s.rangeCount||document.activeEleme
  if(el.closest('td,th'))return null;const li=el.closest('#editor li');if(!li)return null;let blk=el;while(blk&&blk.parentNode!==li)blk=blk.parentNode;
  if(blk&&blk.nodeType===1&&/^(P|DIV|H1|H2|H3)$/.test(blk.nodeName)&&tglLi(li))return {kind:'body',blk,T:li};
  const ul=li.parentNode,pli=ul.parentNode&&ul.parentNode.nodeName==='LI'?ul.parentNode:null;return {kind:'li',li,ul,pli,T:pli&&tglLi(pli)?pli:null}}
+function titleToBody(li,need){if(!tglLi(li)||li.dataset.collapsed==='1')return false;const fb=[...li.children].find(isBlkN);if(!fb)return false;const s=getSelection();if(need){const r=document.createRange();try{r.setStart(s.anchorNode,s.anchorOffset);r.setEndBefore(fb)}catch(_){return false}if(r.toString().replace(/[\u200b\ufeff]/g,''))return false}
+ const t=isList(fb)?(fb.querySelector(':scope>li')||fb):fb;caretIn(t);updateActive();return true}
+window.addEventListener('keydown',e=>{if(e.key!=='Escape'||e.ctrlKey||e.altKey||e.metaKey)return;const c=listCtx();if(c&&c.kind==='li'&&titleToBody(c.li,false))e.preventDefault()},true);
 window.addEventListener('keydown',e=>{if(e.ctrlKey||e.altKey||e.metaKey||e.isComposing||(e.key!=='Enter'&&e.key!=='Tab'))return;const s=getSelection();if(e.key==='Enter'&&s.rangeCount&&!s.isCollapsed)return;
  const c=listCtx();if(!c)return;const go=()=>{e.preventDefault();e.stopPropagation()};const fin=el=>{if(el)caretIn(el);recompute();ed.oninput();updateActive()};
  if(e.key==='Enter'){
   if(c.kind==='body'){if(e.shiftKey){go();fin(newToggleAfter(c.T))}else if(blkEmpty(c.blk)&&!c.blk.nextElementSibling){go();c.blk.remove();fin(newToggleAfter(c.T))}return}
   const {li,ul,pli,T}=c;
   if(e.shiftKey){if(tglLi(li)){go();fin(newToggleAfter(li))}else if(T){go();fin(newToggleAfter(T))}return}
+  if(titleToBody(li,true)){go();return}
   if(!blkEmpty(li))return;go();
   if(T){li.remove();if(!ul.children.length)ul.remove();fin(newToggleAfter(T))}else if(pli){outdentLi(li);fin(li)}else fin(liToP(li));return}
  go();const off=caretOff();let ok=false,target=null;
