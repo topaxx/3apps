@@ -86,6 +86,11 @@ input[type=text].tx{font:inherit;font-size:.85rem;flex:1;min-width:0;border:1px 
 .fld .fh.rs{right:-8px;bottom:-8px;background:var(--accent);cursor:nwse-resize}
 .fld.edit:hover .fh,.fld.edit.sel .fh{display:block}
 .pg.armf{cursor:crosshair}
+.fld .dp{position:absolute;inset:0;pointer-events:none;display:none;color:#111;font-family:Helvetica,Arial,sans-serif;white-space:pre}
+.fld .dp span{position:absolute;top:50%;transform:translate(-50%,-50%);line-height:1}
+.fld.date.hasv:not(:focus-within) .dp{display:block}
+.fld.date.hasv:not(:focus-within) .fi{color:transparent}
+.fld.bad .fi,.noOutlines .fld.bad .fi:not(:focus){outline:2px solid #dc2626;outline-offset:0}
 .pg .drag{position:absolute;border:1.5px dashed var(--accent);background:rgba(79,70,229,.08);pointer-events:none;z-index:4}
 </style>
 </head>
@@ -411,32 +416,75 @@ async function acroFields(page, vp, p) {
 
 // Flat PDFs: dotted leaders / underscores in the text layer
 async function textLineFields(page, vp, p) {
-  const tc = await page.getTextContent(), runs = [];
+  const tc = await page.getTextContent(), runs = [], glyphs = [];
   p.capsHint = CAPS_RE.test(tc.items.map(i => i.str).join(" "));
   const sc = Math.hypot(vp.transform[0], vp.transform[1]);
   for (const it of tc.items) {
-    if (!it.str || !/[.…_]/.test(it.str)) continue;
+    if (!it.str) continue;
     const t = pdfjs.Util.transform(vp.transform, it.transform);
     if (Math.abs(t[1]) > 0.01 * Math.abs(t[0]) || t[0] <= 0) continue; // horizontal text only (in view space)
     const fsz = Math.hypot(t[2], t[3]), W = it.width * sc, bx = t[4], by = t[5];
     mctx.font = `${fsz}px Helvetica, Arial, sans-serif`;
-    const full = mctx.measureText(it.str).width || 1, k = W / full;
+    const full = mctx.measureText(it.str).width || 1, k = W / full, at = i => mctx.measureText(it.str.slice(0, i)).width * k;
+    // per-character boxes (approximate) for line-level patterns such as bare "  /   /  " dates
+    let prev = 0; for (let i = 0; i < it.str.length; i++) { const nx = at(i + 1); glyphs.push({ c: it.str[i], x0: bx + prev, x1: bx + nx, y: by, fs: fsz }); prev = nx; }
+    if (!/[.…_]/.test(it.str)) continue;
     const re = /[.…]{3,}|…{2,}|_{2,}/g; let m;
-    while ((m = re.exec(it.str))) {
-      const a = mctx.measureText(it.str.slice(0, m.index)).width * k, b = mctx.measureText(it.str.slice(0, m.index + m[0].length)).width * k;
-      runs.push({ x0: bx + a, x1: bx + b, y: by, fs: fsz, u: m[0][0] === "_" });
-    }
+    while ((m = re.exec(it.str))) runs.push({ x0: bx + at(m.index), x1: bx + at(m.index + m[0].length), y: by, fs: fsz, u: m[0][0] === "_" });
   }
   // join runs that continue each other on the same line
   runs.sort((a, b) => a.y - b.y || a.x0 - b.x0);
   const merged = [];
   for (const r of runs) { const l = merged[merged.length - 1]; if (l && Math.abs(l.y - r.y) < 1.5 && r.x0 - l.x1 < r.fs * 0.35 && l.u === r.u) l.x1 = Math.max(l.x1, r.x1); else merged.push({ ...r }); }
-  return merged.filter(r => r.x1 - r.x0 >= 10).map(r => {
+  const dates = dateFields(glyphs);
+  const mk = (r, extra) => {
     const fs = Math.max(6, Math.min(13, r.fs * 0.95)), h = Math.max(fs * 1.35, r.fs * 1.3);
-    // put the text baseline just above the dots / underline
-    const top = r.y - (r.u ? 1.2 : 2) - h / 2 - 0.35 * fs;
-    return { id: uid(), key: p.key, kind: "text", src: "auto", x: r.x0, y: top, w: r.x1 - r.x0, h, fs, value: "" };
-  });
+    // put the text baseline just above the dots / underline (or right on the line for blank dates)
+    const top = r.y - (r.u ? 1.2 : r.blank ? 0.3 : 2) - h / 2 - 0.35 * fs;
+    return { id: uid(), key: p.key, kind: "text", src: "auto", x: r.x0, y: top, w: r.x1 - r.x0, h, fs, value: "", ...extra };
+  };
+  const out = dates.map(d => mk(d, { date: true, slashes: d.slashes.map(x => x - d.x0) }));
+  for (const r of merged) {
+    if (r.x1 - r.x0 < 10) continue;
+    if (dates.some(d => Math.abs(d.y - r.y) < 1.5 && r.x0 < d.x1 - 1 && r.x1 > d.x0 + 1)) continue; // part of a date: merged
+    out.push(mk(r));
+  }
+  return out;
+}
+// "Geboortedatum :      /      /        " (blank gaps) or ".. / .. / ...." after a label -> one DD/MM/YYYY field
+const DATE_RE = /dat(um|e)|geboren|né\(e\)|naissance|birth|jj|dd|mm|inverkeer|vervaldag|tot\s*:|van\s*:|from|until/i;
+function dateFields(glyphs) {
+  glyphs.sort((a, b) => a.y - b.y || a.x0 - b.x0);
+  const lines = [];
+  for (const g of glyphs) { const l = lines[lines.length - 1]; if (l && Math.abs(l.y - g.y) < Math.max(1.5, g.fs * 0.2)) l.g.push(g); else lines.push({ y: g.y, g: [g] }); }
+  const filler = c => /[\s.…_\u00a0]/.test(c), out = [];
+  for (const L of lines) {
+    const g = L.g.sort((a, b) => a.x0 - b.x0), fs = Math.max(...g.map(q => q.fs));
+    for (let i = 0; i < g.length; i++) {
+      if (g[i].c !== "/") continue;
+      let j = i + 1; while (j < g.length && filler(g[j].c)) j++;
+      if (j >= g.length || g[j].c !== "/") continue;
+      const s1 = g[i], s2 = g[j], mid = s2.x0 - s1.x1;
+      if (mid < fs * 0.8) continue;
+      // left part: back over blanks/dots to the label
+      let a = i - 1; while (a >= 0 && filler(g[a].c)) a--;
+      const dotsL = g.slice(a + 1, i).filter(q => /[.…_]/.test(q.c)), labelEnd = a >= 0 ? g[a].x1 : s1.x0 - mid;
+      const left = dotsL.length ? dotsL[0].x0 : labelEnd + fs * 0.35;
+      if (s1.x0 - left < fs * 0.8) continue;
+      const label = g.slice(Math.max(0, a - 60), a + 1).map(q => q.c).join("");
+      // right part: over blanks/dots to the next text (or a sensible width)
+      let b = j + 1; while (b < g.length && filler(g[b].c)) b++;
+      const dotsR = g.slice(j + 1, b).filter(q => /[.…_]/.test(q.c));
+      let right = dotsR.length ? dotsR[dotsR.length - 1].x1 : Math.min(b < g.length ? g[b].x0 - fs * 0.6 : Infinity, s2.x1 + Math.max(mid * 1.6, fs * 2.6));
+      if (right - s2.x1 < fs * 1.2) continue;
+      const dotted = dotsL.length || dotsR.length;
+      // generic bare "  /  /  " is accepted; dotted ".. / .. / ...." needs a date-like label (dots are handled anyway)
+      if (dotted && !DATE_RE.test(label) && !/[:]\s*$/.test(label)) continue;
+      out.push({ x0: left, x1: right, y: L.y, fs, blank: !dotted, slashes: [(s1.x0 + s1.x1) / 2, (s2.x0 + s2.x1) / 2], label });
+      i = j;
+    }
+  }
+  return out;
 }
 
 // Flat PDFs: small stroked squares in the vector drawing
@@ -558,14 +606,16 @@ function drawField(f, append) {
   const p = pages.find(x => x.key === f.key); if (!p?.el) return;
   let el = p.el.querySelector(`.fld[data-id="${f.id}"]`);
   if (!el) {
-    el = document.createElement("div"); el.className = "fld " + f.kind + (f.src !== "acro" ? " edit" : "") + (f.printed ? " printed" : ""); el.dataset.id = f.id;
+    el = document.createElement("div"); el.className = "fld " + f.kind + (f.date ? " date" : "") + (f.src !== "acro" ? " edit" : "") + (f.printed ? " printed" : ""); el.dataset.id = f.id;
     let inp;
     if (f.kind === "text") {
       inp = document.createElement(f.multi ? "textarea" : "input"); inp.className = "fi"; if (!f.multi) inp.type = "text";
       inp.spellcheck = false; inp.autocomplete = "off"; inp.value = f.value; inp.disabled = f.ro; if (f.maxLen) inp.maxLength = f.maxLen;
-      inp.setAttribute("aria-label", f.name || "Form field");
+      inp.setAttribute("aria-label", f.name || (f.date ? "Date (DD/MM/YYYY)" : "Form field"));
+      if (f.date) { inp.placeholder = "DD/MM/YYYY"; inp.inputMode = "numeric"; inp.maxLength = 10; const dp = document.createElement("div"); dp.className = "dp"; dp.innerHTML = "<span></span><span></span><span></span>"; el.append(dp); }
       inp.addEventListener("input", () => {
         let v = inp.value;
+        if (f.date) { const nv = fmtDate(v, f.value); if (nv !== v) { inp.value = nv; inp.setSelectionRange(nv.length, nv.length); } v = nv; }
         if ($("caps").checked && (f.caps || p.capsHint) && v !== v.toUpperCase()) { const s = inp.selectionStart, e = inp.selectionEnd; v = v.toLocaleUpperCase("nl-BE"); inp.value = v; inp.setSelectionRange(s, e); }
         f.value = v; markDirty(); styleText(f, inp);
         if (f.name) for (const o of fields) if (o !== f && o.name === f.name && o.kind === "text") { o.value = v; const oi = document.querySelector(`.fld[data-id="${o.id}"] .fi`); if (oi) { oi.value = v; styleText(o, oi); } }
@@ -602,7 +652,38 @@ function drawField(f, append) {
   if (f.kind === "text" || f.kind === "choice") styleText(f, inp);
   else { inp.setAttribute("aria-checked", f.value); inp.innerHTML = f.value ? `<svg viewBox="0 0 100 100">${MARK[f.kind === "radio" ? "dot" : ckStyle]}</svg>` : ""; inp.title = f.printed && !f.value ? "Printed as ticked" : ""; }
 }
-function styleText(f, inp) { inp.style.fontSize = (f.kind === "text" ? fitFs(f) : f.fs) * zoom + "px"; inp.style.padding = f.multi ? `${zoom}px ${2 * zoom}px` : `0 ${1.5 * zoom}px`; }
+// European dates: digits are grouped as DD/MM/YYYY while typing ("15031990" -> "15/03/1990")
+function fmtDate(v, old = "") {
+  if (v.length < old.length && old.startsWith(v)) return v; // deleting: leave as is
+  const parts = v.split(/[\/.\-\s]+/);
+  // separators typed by the user (e.g. "1/3/90") vs. the ones we inserted ("15/03" + "1990")
+  const typedSep = parts.length > 1 && (parts.slice(0, -1).some(q => q.length !== 2) || /[.\-\s]/.test(v) || (/\/$/.test(v) && !/\/$/.test(old)));
+  if (typedSep) { // user typed separators: pad finished parts ("1/3/90" style)
+    const out = parts.slice(0, 3).map((q, i) => q.replace(/\D/g, "").slice(0, i < 2 ? 2 : 4));
+    for (let i = 0; i < out.length - 1; i++) if (out[i].length === 1) out[i] = "0" + out[i];
+    if (out.length < 3 && /[\/.\-\s]$/.test(v) && out[out.length - 1]) { if (out[out.length - 1].length === 1) out[out.length - 1] = "0" + out[out.length - 1]; out.push(""); }
+    return out.join("/").slice(0, 10);
+  }
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  return d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+}
+function dateOk(v) {
+  if (!v) return true;
+  const [d, m, y] = v.split("/");
+  if (d && (d.length === 2 || m !== undefined) && (+d < 1 || +d > 31)) return false;
+  if (m && (m.length === 2 || y !== undefined) && (+m < 1 || +m > 12)) return false;
+  if (d && m && y && y.length === 4) { const dt = new Date(+y, +m - 1, +d); if (dt.getDate() !== +d || dt.getMonth() !== +m - 1) return false; }
+  return !/[^\d/]/.test(v);
+}
+// the three gaps around the printed slashes, in field coordinates
+function dateGaps(f) { const s = f.slashes, pad = f.fs * 0.3; return [[1, s[0] - pad], [s[0] + pad, s[1] - pad], [s[1] + pad, f.w - 1]]; }
+function dateParts(f) { const p = (f.value || "").split("/"); return f.slashes && p.length === 3 && p.every(x => /^\d*$/.test(x)) ? p : null; }
+function styleText(f, inp) {
+  if (f.date) {
+    const el = inp.parentElement; el.classList.toggle("bad", !dateOk(f.value)); el.classList.toggle("hasv", !!f.value && !!dateParts(f));
+    const dp = el.querySelector(".dp"), parts = dateParts(f);
+    if (dp && parts) { const G = dateGaps(f); dp.querySelectorAll("span").forEach((sp, i) => { sp.textContent = parts[i]; sp.style.left = (G[i][0] + G[i][1]) / 2 * zoom + "px"; sp.style.fontSize = f.fs * zoom + "px"; }); }
+  } inp.style.fontSize = (f.kind === "text" ? fitFs(f) : f.fs) * zoom + "px"; inp.style.padding = f.multi ? `${zoom}px ${2 * zoom}px` : `0 ${1.5 * zoom}px`; }
 function insertOrdered(p, f, el) {
   const list = ordered(fields.filter(x => x.key === p.key)), i = list.indexOf(f), next = list.slice(i + 1).map(x => p.el.querySelector(`.fld[data-id="${x.id}"]`)).find(Boolean);
   p.el.insertBefore(el, next || null);
@@ -671,6 +752,11 @@ async function drawFlatFields(out, cp, vp, list, rot, font) {
       const P = (u, v) => vp.convertToPdfPoint(f.x + u * f.w, f.y + v * f.h), th = Math.max(0.7, Math.min(f.w, f.h) * 0.12);
       const segs = ckStyle === "v" ? [[[0.18, 0.55], [0.42, 0.78]], [[0.42, 0.78], [0.84, 0.22]]] : [[[0.22, 0.22], [0.78, 0.78]], [[0.78, 0.22], [0.22, 0.78]]];
       for (const [a, b] of segs) { const [x1, y1] = P(...a), [x2, y2] = P(...b); cp.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: th, color: ink, lineCap: PDFLib.LineCapStyle.Round }); }
+    } else if (f.kind === "text" && f.value && f.date && dateParts(f)) {
+      // DD, MM and YYYY centred in the gaps between the printed slashes
+      const G = dateGaps(f), by = f.y + f.h / 2 + 0.35 * f.fs;
+      dateParts(f).forEach((t, i) => { if (!t) return; let fs = f.fs, w = font.widthOfTextAtSize(t, fs); const room = G[i][1] - G[i][0]; if (w > room && room > 2) { fs *= room / w; w = room; }
+        const [x, y] = vp.convertToPdfPoint(f.x + (G[i][0] + G[i][1]) / 2 - w / 2, by); cp.drawText(t, { x, y, size: fs, font, color: ink, rotate: degrees(rot) }); });
     } else if (f.kind === "text" && f.value) {
       const lines = f.multi ? f.value.split("\n") : [f.value.replace(/\n/g, " ")], fs = fitFs(f);
       for (let li = 0; li < lines.length; li++) {
