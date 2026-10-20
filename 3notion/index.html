@@ -446,6 +446,20 @@ function mdToHtml(tx){const lines=tx.replace(/\r/g,'').split('\n');let out='',st
   if(!line){continue}close(0);const h=line.match(/^(#{1,3})\s+(.*)$/);out+=h?`<h${h[1].length}>${esc(h[2])}</h${h[1].length}>`:'<p>'+esc(line)+'</p>'}
  close(0);return out}
 function listItem(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return null;const el=s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentNode;if(el.closest('td,th'))return null;return el.closest('#editor li')}
+// toggle title helpers: first child type, Enter/Backspace on titles
+const titleText=li=>[...li.childNodes].filter(n=>!isBlkN(n)).map(n=>n.textContent).join('').replace(/[\s\u200b\ufeff]/g,'');
+function atTitleEnd(li){const s=getSelection();if(!s.rangeCount)return false;const r=document.createRange();try{r.setStart(s.anchorNode,s.anchorOffset);const fb=[...li.children].find(isBlkN);if(fb)r.setEndBefore(fb);else r.setEnd(li,li.childNodes.length)}catch(_){return false}return !r.toString().replace(/[\u200b\ufeff]/g,'')}
+function mkChild(kind){if(kind==='todo'){const u=document.createElement('ul');u.className='todo';const l=document.createElement('li');l.innerHTML='<br>';u.appendChild(l);return [u,l]}const p=document.createElement('p');p.innerHTML='<br>';return [p,p]}
+function childKind(li){const kids=x=>{if(!tglLi(x))return null;const fb=[...x.children].find(isBlkN);return fb?(fb.matches('ul.todo')?'todo':'p'):null};
+ for(const sb of [li.previousElementSibling,li.nextElementSibling]){const k=kids(sb);if(k)return k}
+ const tg=[...ed.querySelectorAll('ul.toggle>li')],i=tg.indexOf(li);for(let j=i-1;j>=0;j--){const k=kids(tg[j]);if(k)return k}for(let j=i+1;j<tg.length;j++){const k=kids(tg[j]);if(k)return k}
+ let top=li;while(top.parentNode!==ed&&top.parentNode)top=top.parentNode;const pv=top.previousElementSibling;if(pv&&pv.matches('ul.todo'))return 'todo';
+ const todoN=ed.querySelectorAll('ul.todo>li').length,other=[...ed.querySelectorAll('p,h1,h2,h3,ol>li,ul:not(.todo):not(.toggle)>li')].filter(x=>x.textContent.trim()).length;return todoN&&todoN>=other?'todo':'p'}
+function caretEndOf(x){let el=x;while(el.dataset.collapsed!=='1'){const last=[...el.children].filter(isBlkN).pop();if(!last)break;if(isList(last)){if(!last.lastElementChild)break;el=last.lastElementChild}else{el=last;break}}
+ const tn=[...el.childNodes].filter(n=>!isBlkN(n)),l=tn[tn.length-1],r=document.createRange();if(l&&l.nodeType===3)r.setStart(l,l.length);else if(l&&l.nodeName!=='BR'){r.selectNodeContents(l);r.collapse(false)}else r.setStart(el,0);const s=getSelection();s.removeAllRanges();s.addRange(r)}
+window.addEventListener('keydown',e=>{if(e.key!=='Backspace'||e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;const s=getSelection();if(!s.rangeCount||!s.isCollapsed)return;const c=listCtx();if(!c||c.kind!=='li'||!tglLi(c.li))return;const li=c.li;
+ if(titleText(li)||[...li.children].filter(isBlkN).some(b=>!blkEmpty(b)))return;e.preventDefault();e.stopPropagation();const prev=li.previousElementSibling;
+ if(prev&&prev.nodeName==='LI'){const ul=li.parentNode;li.remove();if(!ul.children.length)ul.remove();caretEndOf(prev)}else caretIn(liToP(li));recompute();ed.oninput();updateActive()},true);
 // group selection into a toggle (Ctrl+G) / ungroup (Ctrl+Shift+G)
 function kidAt(P,node,off,end){if(node===P){const k=end?P.childNodes[off-1]:P.childNodes[off];return k||(end?P.lastChild:P.firstChild)}while(node&&node.parentNode!==P)node=node.parentNode;return node}
 function elKid(k,end){while(k&&k.nodeType!==1)k=end?k.previousSibling:k.nextSibling;return k}
@@ -465,7 +479,7 @@ function groupSel(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anch
  else{if(!ca||!cb)return;
   if(isList(ca)&&ca.contains(sN)){const li=elKid(kidAt(ca,sN,sO,false),false);if(li&&li.parentNode===ca&&li.previousElementSibling){const pre=mkList(ca);while(ca.firstChild!==li)pre.appendChild(ca.firstChild);ca.before(pre)}}
   if(isList(cb)&&cb.contains(eN)){const li=elKid(kidAt(cb,eN,eO,true),true);if(li&&li.parentNode===cb&&li.nextElementSibling){const post=mkList(cb);while(li.nextSibling)post.appendChild(li.nextSibling);cb.after(post)}}
-  const units=[];for(let x=ca;x;x=x.nextSibling){units.push(x);if(x===cb)break}ca.before(tg);units.forEach(u=>tli.appendChild(u))}
+  const units=[];for(let x=ca;x;x=x.nextSibling){units.push(x);if(x===cb)break}ca.before(tg);const els=units.filter(u=>u.nodeType===1);if(els.length===1&&!isList(els[0])&&!els[0].matches('table,div.imgrow')&&blkEmpty(els[0])){units.forEach(u=>u.remove());tli.appendChild(mkChild(childKind(tli))[0])}else units.forEach(u=>tli.appendChild(u))}
  caretIn(tli);recompute();ed.oninput();updateActive()}
 function ungroupSel(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.anchorNode))return;let T=elOf(s.anchorNode).closest('li');while(T&&!tglLi(T))T=T.parentNode.closest('li');if(!T||!ed.contains(T))return;
  const L=T.parentNode,off=caretOff();const title=[...T.childNodes].filter(n=>!isBlkN(n)),items=[];
@@ -479,7 +493,7 @@ function ungroupSel(){const s=getSelection();if(!s.rangeCount||!ed.contains(s.an
 // list & toggle keys (capture phase so Firefox can't take them)
 const isList=x=>!!x&&(x.nodeName==='UL'||x.nodeName==='OL');
 const tglLi=x=>!!x&&x.nodeName==='LI'&&!!x.parentNode&&!!x.parentNode.classList&&x.parentNode.classList.contains('toggle');
-const blkEmpty=b=>!b.querySelector('ul,ol,img,table,p,div,h1,h2,h3')&&!b.textContent.replace(/[\s\u200b\ufeff]/g,'');
+const blkEmpty=b=>!b.matches('table,div.imgrow,img')&&!b.querySelector('ul,ol,img,table,p,div,h1,h2,h3')&&!b.textContent.replace(/[\s\u200b\ufeff]/g,'');
 function mkList(like){const l=document.createElement(like.nodeName);if(like.className)l.className=like.className;return l}
 function caretIn(el){const r=document.createRange();r.setStart(el,0);r.collapse(true);const s=getSelection();s.removeAllRanges();s.addRange(r)}
 function newToggleAfter(t){const li=document.createElement('li');li.innerHTML='<br>';t.after(li);return li}
@@ -501,10 +515,14 @@ window.addEventListener('keydown',e=>{if(e.key!=='Escape'||e.ctrlKey||e.altKey||
 window.addEventListener('keydown',e=>{if(e.ctrlKey||e.altKey||e.metaKey||e.isComposing||(e.key!=='Enter'&&e.key!=='Tab'))return;const s=getSelection();if(e.key==='Enter'&&s.rangeCount&&!s.isCollapsed)return;
  const c=listCtx();if(!c)return;const go=()=>{e.preventDefault();e.stopPropagation()};const fin=el=>{if(el)caretIn(el);recompute();ed.oninput();updateActive()};
  if(e.key==='Enter'){
-  if(c.kind==='body'){if(e.shiftKey){go();fin(newToggleAfter(c.T))}else if(blkEmpty(c.blk)&&!c.blk.nextElementSibling){go();c.blk.remove();fin(newToggleAfter(c.T))}return}
+  if(c.kind==='body'){if(e.shiftKey){go();fin(newToggleAfter(c.T))}else if(blkEmpty(c.blk)&&!c.blk.nextElementSibling){go();c.blk.remove();fin(newToggleAfter(c.T))}
+   else if(/^(P|H1|H2|H3)$/.test(c.blk.nodeName)){go();const r=document.createRange();r.setStart(s.anchorNode,s.anchorOffset);r.setEnd(c.blk,c.blk.childNodes.length);const frag=r.extractContents();const np=document.createElement('p');np.appendChild(frag);
+    if(!np.textContent&&!np.querySelector('img'))np.innerHTML='<br>';if(!c.blk.textContent&&!c.blk.querySelector('img'))c.blk.innerHTML='<br>';c.blk.after(np);fin(np)}return}
   const {li,ul,pli,T}=c;
   if(e.shiftKey){if(tglLi(li)){go();fin(newToggleAfter(li))}else if(T){go();fin(newToggleAfter(T))}return}
-  if(titleToBody(li,true)){go();return}
+  if(tglLi(li)&&atTitleEnd(li)){const body=[...li.children].filter(isBlkN),own=titleText(li),empty=!body.length||body.every(blkEmpty);
+   if(li.dataset.collapsed==='1'&&!empty){go();fin(newToggleAfter(li));return}
+   if(own||body.length){go();li.removeAttribute('data-collapsed');if(!body.length){const [n,t]=mkChild(childKind(li));li.appendChild(n);fin(t)}else{titleToBody(li,false);fin(null)}return}}
   if(!blkEmpty(li))return;go();
   if(T){li.remove();if(!ul.children.length)ul.remove();fin(newToggleAfter(T))}else if(pli){outdentLi(li);fin(li)}else fin(liToP(li));return}
  go();const off=caretOff();let ok=false,target=null;
