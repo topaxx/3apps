@@ -88,8 +88,8 @@ input[type=text].tx{font:inherit;font-size:.85rem;flex:1;min-width:0;border:1px 
 .pg.armf{cursor:crosshair}
 .fld .dp{position:absolute;inset:0;pointer-events:none;display:none;color:#111;font-family:Helvetica,Arial,sans-serif;white-space:pre}
 .fld .dp span{position:absolute;top:50%;transform:translate(-50%,-50%);line-height:1}
-.fld.date.hasv:not(:focus-within) .dp{display:block}
-.fld.date.hasv:not(:focus-within) .fi{color:transparent}
+.fld.ov.hasv:not(:focus-within) .dp{display:block}
+.fld.ov.hasv:not(:focus-within) .fi{color:transparent}
 .fld.bad .fi,.noOutlines .fld.bad .fi:not(:focus){outline:2px solid #dc2626;outline-offset:0}
 .pg .drag{position:absolute;border:1.5px dashed var(--accent);background:rgba(79,70,229,.08);pointer-events:none;z-index:4}
 dialog#imgDlg{border:1px solid var(--border);border-radius:16px;background:var(--card);color:var(--text);padding:0;width:min(820px,94vw);max-height:90vh;box-shadow:0 10px 40px rgba(0,0,0,.3)}
@@ -347,6 +347,13 @@ function renderPages() {
     el.querySelector(".pgbar").addEventListener("click", e => { const a = e.target.dataset.a; if (!a) return; e.stopPropagation(); pageAction(p, a, e.target); });
     const cv = document.createElement("canvas"); el.append(cv);
     p.el = el; p.canvas = cv; p.rendered = 0;
+    // "+ Text field" / "+ Checkmark" also work on top of detected fields (e.g. a row of boxes taken for checkboxes)
+    el.addEventListener("pointerdown", e => {
+      if (!(armed?.type === "field" || armed?.type === "mark") || !e.target.closest?.(".fld") || e.target.closest(".fh")) return;
+      e.stopPropagation(); placeField(p, e);
+      const eat = ev => { ev.stopPropagation(); ev.preventDefault(); };
+      window.addEventListener("click", eat, true); window.addEventListener("pointerup", () => setTimeout(() => window.removeEventListener("click", eat, true), 0), { once: true });
+    }, true);
     el.addEventListener("pointerdown", e => { if (e.target === cv || e.target === el) { if (armed?.type === "field" || armed?.type === "mark") placeField(p, e); else if (armed) placeAt(p, e); else { select(null); selField(null); } } });
     el.addEventListener("dragover", e => { if (e.dataTransfer.types.includes("application/x-3pdf-sig")) { e.preventDefault(); e.stopPropagation(); } });
     el.addEventListener("drop", e => { const id = e.dataTransfer.getData("application/x-3pdf-sig"); const s = sigs.find(x => x.id === id); if (s) { e.preventDefault(); e.stopPropagation(); placeAt(p, e, { type: "sig", sig: s }); } });
@@ -461,8 +468,10 @@ async function acroFields(page, vp, p) {
   return out;
 }
 
-// Flat PDFs: dotted leaders / underscores in the text layer
-async function textLineFields(page, vp, p) {
+// Flat PDFs: dotted leaders / underscores / dashes / drawn lines in the text layer
+const SLOT_C = /[_—–‒―]/, DASH_C = /[—–‒―]/, BLANK_C = /[\s.…_\u00a0—–‒―]/;
+const BANK_RE = /iban|bankrek|rekening|rek\.\s*n|compte|konto|bank\s*account|account\s*n|n°\s*de\s*compte/gi, BIC_RE = /\bbic\b|\bswift\b/gi;
+async function textLineFields(page, vp, p, shp = {}) {
   const tc = await page.getTextContent(), runs = [], glyphs = [];
   p.capsHint = CAPS_RE.test(tc.items.map(i => i.str).join(" "));
   const sc = Math.hypot(vp.transform[0], vp.transform[1]);
@@ -481,32 +490,143 @@ async function textLineFields(page, vp, p) {
   }
   // join runs that continue each other on the same line
   runs.sort((a, b) => a.y - b.y || a.x0 - b.x0);
-  const merged = [];
+  let merged = [];
   for (const r of runs) { const l = merged[merged.length - 1]; if (l && Math.abs(l.y - r.y) < 1.5 && r.x0 - l.x1 < r.fs * 0.35 && l.u === r.u) l.x1 = Math.max(l.x1, r.x1); else merged.push({ ...r }); }
-  const dates = dateFields(glyphs);
+  const lines = textLines(glyphs, shp.segs || []);
+  const dates = dateFields(lines), ibans = ibanFields(lines, vp.width), slots = slotRuns(lines);
+  const ov = (a, b) => Math.abs(a.y - b.y) < Math.max(2, b.fs * 0.6) && a.x0 < b.x1 - 1 && a.x1 > b.x0 + 1;
+  // spaced "_ _ _" / dash / drawn-line runs swallow the plain runs they overlap
+  for (const s of slots) { const hit = merged.filter(r => ov(r, s)); for (const r of hit) { s.x0 = Math.min(s.x0, r.x0); s.x1 = Math.max(s.x1, r.x1); } merged = merged.filter(r => !hit.includes(r)); merged.push(s); }
   const mk = (r, extra) => {
     const fs = Math.max(6, Math.min(13, r.fs * 0.95)), h = Math.max(fs * 1.35, r.fs * 1.3);
     // put the text baseline just above the dots / underline (or right on the line for blank dates)
     const top = r.y - (r.u ? 1.2 : r.blank ? 0.3 : 2) - h / 2 - 0.35 * fs;
     return { id: uid(), key: p.key, kind: "text", src: "auto", x: r.x0, y: top, w: r.x1 - r.x0, h, fs, value: "", ...extra };
   };
-  const out = dates.map(d => mk(d, { date: true, slashes: d.slashes.map(x => x - d.x0) }));
+  const out = dates.map(d => mk(d, { date: true, slashes: d.slashes.map(x => x - d.x0), ...(d.cells ? { cells: d.cells.map(x => x - d.x0), groups: d.groups, cellW: d.cellW } : {}) }));
+  for (const b of ibans) if (!dates.some(d => ov(d, b))) out.push(mk(b, { iban: true, prefix: b.prefix, caps: true, ...(b.cells ? { cells: b.cells.map(x => x - b.x0), cellW: b.cellW } : {}), ...(b.slotGroups ? { slotGroups: b.slotGroups.map(([a, c]) => [a - b.x0, c - b.x0]) } : {}) }));
   for (const r of merged) {
     if (r.x1 - r.x0 < 10) continue;
-    if (dates.some(d => Math.abs(d.y - r.y) < 1.5 && r.x0 < d.x1 - 1 && r.x1 > d.x0 + 1)) continue; // part of a date: merged
+    if (dates.some(d => ov(d, r)) || ibans.some(d => ov(d, r))) continue; // part of a date / bank account: merged
     out.push(mk(r));
+  }
+  // boxed fields: comb rows ("BE |_|_|_|...") and empty one-line frames
+  for (const c of shp.combs || []) {
+    const L = lines.find(L => L.y > c.y + c.h * 0.3 && L.y < c.y + c.h + 3), lab = L ? labelLeft(L, c.x) : { iban: false, prefix: "" };
+    let cells = c.cells, prefix = lab.prefix;
+    // leading boxes with printed letters (e.g. "B" "E") are not part of the field
+    while (cells && cells.length && L && L.g.some(q => !/\s/.test(q.c) && !q.vec && (q.x0 + q.x1) / 2 > cells[0][0] && (q.x0 + q.x1) / 2 < cells[0][1])) { prefix += L.g.filter(q => (q.x0 + q.x1) / 2 > cells[0][0] && (q.x0 + q.x1) / 2 < cells[0][1]).map(q => q.c).join("").trim(); cells = cells.slice(1); }
+    if (cells && L && cells.filter(([a, b]) => L.g.some(q => !/\s/.test(q.c) && !q.vec && (q.x0 + q.x1) / 2 > a && (q.x0 + q.x1) / 2 < b)).length > cells.length / 3) continue; // a filled-in table, not an input
+    if (!cells) { if (glyphs.some(q => !/\s/.test(q.c) && (q.x0 + q.x1) / 2 > c.x && (q.x0 + q.x1) / 2 < c.x + c.w && q.y > c.y && q.y - q.fs * 0.5 < c.y + c.h)) continue; }
+    const x = cells ? cells[0][0] : c.x, w = cells ? cells[cells.length - 1][1] - x : c.w;
+    if (cells && cells.length < 2) continue;
+    const cellW = cells ? Math.min(...cells.map(([a, b]) => b - a)) : 0;
+    const fs = Math.max(6, Math.min(13, c.h * 0.62, cells ? cellW * 1.05 : 99));
+    const iban = lab.iban || /^B\s*E$/i.test(prefix);
+    out.push({ id: uid(), key: p.key, kind: "text", src: "auto", x, y: c.y, w, h: c.h, fs, value: "", ...(cells ? { cells: cells.map(([a, b]) => (a + b) / 2 - x), cellW } : {}), ...(iban ? { iban: true, prefix: /^B\s*E$/i.test(prefix) ? "BE" : prefix.replace(/\s/g, "").toUpperCase(), caps: true } : {}) });
   }
   return out;
 }
-// "Geboortedatum :      /      /        " (blank gaps) or ".. / .. / ...." after a label -> one DD/MM/YYYY field
-const DATE_RE = /dat(um|e)|geboren|né\(e\)|naissance|birth|jj|dd|mm|inverkeer|vervaldag|tot\s*:|van\s*:|from|until/i;
-function dateFields(glyphs) {
+// one text line: characters plus drawn blank lines ("_" pseudo characters) sitting on it
+function textLines(glyphs, segs) {
   glyphs.sort((a, b) => a.y - b.y || a.x0 - b.x0);
   const lines = [];
   for (const g of glyphs) { const l = lines[lines.length - 1]; if (l && Math.abs(l.y - g.y) < Math.max(1.5, g.fs * 0.2)) l.g.push(g); else lines.push({ y: g.y, g: [g] }); }
-  const filler = c => /[\s.…_\u00a0]/.test(c), out = [];
+  for (const L of lines) L.fs = Math.max(...L.g.map(q => q.fs));
+  for (const s of segs) {
+    let best = null, bd = 1e9;
+    for (const L of lines) {
+      const d = s.y - L.y; if (d < -0.55 * L.fs || d > 0.45 * L.fs) continue;
+      if (L.g.some(q => !BLANK_C.test(q.c) && q.x1 > s.x0 + 0.5 && q.x0 < s.x1 - 0.5)) continue; // underlined words, table rules
+      if (Math.abs(d) < bd) { bd = Math.abs(d); best = L; }
+    }
+    if (best) best.g.push({ c: "_", x0: s.x0, x1: s.x1, y: best.y, sy: s.y, fs: best.fs, vec: true });
+  }
+  for (const L of lines) L.g.sort((a, b) => a.x0 - b.x0);
+  return lines;
+}
+// where typed text should sit: just above underscores / dashes / drawn lines
+function slotBase(L, list) { return Math.min(L.y, ...list.map(q => q.vec ? q.sy - 1 : DASH_C.test(q.c) ? L.y - 0.3 * q.fs - 1 : L.y)); }
+// "_ _  _ _ _ _", "— — —" and drawn lines: one field per run of blanks
+function slotRuns(lines) {
+  const out = [];
   for (const L of lines) {
-    const g = L.g.sort((a, b) => a.x0 - b.x0), fs = Math.max(...g.map(q => q.fs));
+    const g = L.g; let run = [];
+    const flush = () => {
+      const s = run.filter(q => SLOT_C.test(q.c));
+      if (s.length && (s.length >= 3 || (s.some(q => q.vec) && s[s.length - 1].x1 - s[0].x0 >= 10))) out.push({ x0: s[0].x0, x1: s[s.length - 1].x1, y: slotBase(L, s), fs: L.fs, u: true });
+      run = [];
+    };
+    for (const q of g) {
+      const last = run.filter(r => SLOT_C.test(r.c)).pop();
+      if (SLOT_C.test(q.c)) { if (last && q.x0 - last.x1 > L.fs * 1.2) flush(); run.push(q); }
+      else if (/\s/.test(q.c) && run.length) run.push(q);
+      else flush();
+    }
+    flush();
+  }
+  return out;
+}
+// what is printed left of x on a line: a bank-account label? a printed "BE" prefix?
+function labelLeft(L, x) {
+  const txt = L.g.filter(q => !q.vec && q.x1 <= x + 1 && q.x0 > x - 320).map(q => q.c).join("");
+  const last = re => { let m, i = -1; re.lastIndex = 0; while ((m = re.exec(txt))) i = m.index; return i; };
+  const bank = last(BANK_RE), bic = last(BIC_RE), pm = txt.match(/(^|[^A-Za-z])(B\s?E)[\s:]*$/);
+  return { iban: bank >= 0 && bank > bic, prefix: pm ? "BE" : "" };
+}
+// "IBAN: BE _ _  _ _ _ _ ...", "Rekeningnr. : .... / .... / ....", "Compte: ______" -> one field (after a printed "BE")
+function ibanFields(lines, pageW) {
+  const out = [], isSlot = q => q.vec || SLOT_C.test(q.c), isDot = q => /[.…]/.test(q.c);
+  for (const L of lines) {
+    const g = L.g, txt = g.map(q => q.vec ? "_" : q.c).join(""), fs = L.fs;
+    BANK_RE.lastIndex = 0; let m;
+    while ((m = BANK_RE.exec(txt))) {
+      // skip the rest of the label ("nummer / IBAN :", "BE") up to the first blank
+      let i = m.index + m[0].length, pre = 0;
+      while (i < g.length && pre < 40) {
+        const q = g[i];
+        if (isSlot(q) || (isDot(q) && g[i + 1] && isDot(g[i + 1]))) break;
+        if (BIC_RE.test(q.c + (g[i + 1]?.c || "") + (g[i + 2]?.c || ""))) { BIC_RE.lastIndex = 0; i = g.length; break; }
+        BIC_RE.lastIndex = 0;
+        if (!/[\s:.\/()°A-Za-z\u00a0-]/.test(q.c)) { i = g.length; break; }
+        if (i > m.index + m[0].length && g[i].x0 - g[i - 1].x1 > fs * 3) { i = g.length; break; }
+        i++; pre++;
+      }
+      if (i >= g.length) continue;
+      const labelTxt = g.slice(m.index, i).map(q => q.c).join(""), prefix = /(^|[^A-Za-z])B\s?E[\s:]*$/.test(labelTxt) ? "BE" : "";
+      // the blanks: slots / dots, spaces, "/" and "-" between groups
+      const s = []; let j = i, lastX = g[i].x0;
+      for (; j < g.length; j++) {
+        const q = g[j];
+        if (q.x0 - lastX > fs * 2.5) break;
+        if (isSlot(q) || isDot(q)) { s.push(q); lastX = q.x1; }
+        else if (/[\s\/\-\u00a0]/.test(q.c)) continue;
+        else break;
+      }
+      if (!s.length) continue;
+      const x0 = s[0].x0; let x1 = s[s.length - 1].x1;
+      if (x1 - x0 < fs * 2) continue;
+      // make room for a full account number when the printed blanks are short
+      const ffs = Math.max(6, Math.min(13, fs * 0.95)); mctx.font = `${ffs}px Helvetica, Arial, sans-serif`;
+      const need = mctx.measureText(prefix ? "68 5390 0754 7034" : "BE68 5390 0754 7034").width * 0.9 + 3;
+      if (x1 - x0 < need) { const nx = g[j] ? g[j].x0 - fs * 0.6 : pageW - 20; x1 = Math.max(x1, Math.min(nx, x0 + need)); }
+      // blank groups ("_ _ _" one per character, ".... / ...." one per group of four)
+      const grp = []; for (const q of s) { const l = grp[grp.length - 1]; if (l && q.x0 - l[l.length - 1].x1 < fs * 0.2 && !q.vec) l.push(q); else grp.push([q]); }
+      const r = { x0, x1, y: s.some(q => q.vec || DASH_C.test(q.c)) ? slotBase(L, s) : L.y, fs, u: s.some(q => isSlot(q)), prefix };
+      if (grp.length >= 6 && grp.every(q => q.length === 1)) { r.cells = s.map(q => (q.x0 + q.x1) / 2); r.cellW = Math.min(...s.slice(1).map((q, k) => q.x0 - s[k].x0)); }
+      else if (grp.length >= 2) r.slotGroups = grp.map(q => [q[0].x0, q[q.length - 1].x1]);
+      out.push(r);
+      BANK_RE.lastIndex = Math.max(BANK_RE.lastIndex, j);
+    }
+  }
+  return out;
+}
+// "Geboortedatum :      /      /        " (blank gaps), ".. / .. / ...." or "— — / — — / — — — —" after a label -> one DD/MM/YYYY field
+const DATE_RE = /dat(um|e)|geboren|né\(e\)|naissance|birth|jj|dd|mm|inverkeer|vervaldag|tot\s*:|van\s*:|from|until/i;
+function dateFields(lines) {
+  const filler = c => BLANK_C.test(c), blankC = q => q.vec || /[.…_—–‒―]/.test(q.c), out = [];
+  for (const L of lines) {
+    const g = L.g, fs = L.fs;
     for (let i = 0; i < g.length; i++) {
       if (g[i].c !== "/") continue;
       let j = i + 1; while (j < g.length && filler(g[j].c)) j++;
@@ -515,35 +635,46 @@ function dateFields(glyphs) {
       if (mid < fs * 0.8) continue;
       // left part: back over blanks/dots to the label
       let a = i - 1; while (a >= 0 && filler(g[a].c)) a--;
-      const dotsL = g.slice(a + 1, i).filter(q => /[.…_]/.test(q.c)), labelEnd = a >= 0 ? g[a].x1 : s1.x0 - mid;
+      const dotsL = g.slice(a + 1, i).filter(blankC), labelEnd = a >= 0 ? g[a].x1 : s1.x0 - mid;
       const left = dotsL.length ? dotsL[0].x0 : labelEnd + fs * 0.35;
       if (s1.x0 - left < fs * 0.8) continue;
       const label = g.slice(Math.max(0, a - 60), a + 1).map(q => q.c).join("");
       // right part: over blanks/dots to the next text (or a sensible width)
       let b = j + 1; while (b < g.length && filler(g[b].c)) b++;
-      const dotsR = g.slice(j + 1, b).filter(q => /[.…_]/.test(q.c));
+      const dotsR = g.slice(j + 1, b).filter(blankC), dotsM = g.slice(i + 1, j).filter(blankC);
       let right = dotsR.length ? dotsR[dotsR.length - 1].x1 : Math.min(b < g.length ? g[b].x0 - fs * 0.6 : Infinity, s2.x1 + Math.max(mid * 1.6, fs * 2.6));
       if (right - s2.x1 < fs * 1.2) continue;
       const dotted = dotsL.length || dotsR.length;
       // generic bare "  /  /  " is accepted; dotted ".. / .. / ...." needs a date-like label (dots are handled anyway)
       if (dotted && !DATE_RE.test(label) && !/[:]\s*$/.test(label)) continue;
-      out.push({ x0: left, x1: right, y: L.y, fs, blank: !dotted, slashes: [(s1.x0 + s1.x1) / 2, (s2.x0 + s2.x1) / 2], label });
+      const all = [...dotsL, ...dotsM, ...dotsR], slotsOnly = all.filter(q => q.vec || SLOT_C.test(q.c)), dashy = all.some(q => q.vec || DASH_C.test(q.c));
+      const d = { x0: left, x1: right, y: dashy ? slotBase(L, all) : L.y, fs, blank: !dotted, u: dashy || all.some(q => q.c === "_"), slashes: [(s1.x0 + s1.x1) / 2, (s2.x0 + s2.x1) / 2], label };
+      // one blank per digit (__ / __ / ____ or — — / — — / — — — —): each digit goes on its own blank
+      if (slotsOnly.length === all.length && dotsL.length === 2 && dotsM.length === 2 && dotsR.length === 4) { d.cells = all.map(q => (q.x0 + q.x1) / 2); d.groups = [[0, 1], [2, 3], [4, 5, 6, 7]]; d.cellW = Math.min(...all.map(q => q.x1 - q.x0), ...all.slice(1).map((q, k) => q.x0 - all[k].x0)); }
+      out.push(d);
       i = j;
     }
   }
   return out;
 }
 
-// Flat PDFs: small stroked squares in the vector drawing
-async function vectorBoxes(page, vp) {
-  const ol = await page.getOperatorList(), out = [], st = [];
+// Flat PDFs: stroked rectangles, short horizontal / vertical lines and hairline fills in the vector drawing
+async function vectorShapes(page, vp) {
+  const ol = await page.getOperatorList(), rects = [], segs = [], vsegs = [], st = [];
   let ctm = [1, 0, 0, 1, 0, 0];
-  const push = pts => {
-    const v = pts.map(([x, y]) => apply(vp.transform, ...apply(ctm, x, y)));
-    const xs = v.map(q => q[0]), ys = v.map(q => q[1]);
-    const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs) - x, h = Math.max(...ys) - y;
-    if (w >= 5 && h >= 5 && w <= 17 && h <= 17 && Math.abs(w - h) <= Math.max(1.2, 0.15 * Math.max(w, h))) out.push({ x, y, w, h });
+  const T = pts => pts.map(([x, y]) => apply(vp.transform, ...apply(ctm, x, y)));
+  const bb = v => { const xs = v.map(q => q[0]), ys = v.map(q => q[1]), x = Math.min(...xs), y = Math.min(...ys); return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }; };
+  const rect = (pts, filled) => {
+    const r = bb(T(pts));
+    if (r.h <= 1.8 && r.w >= 3 && r.w <= 400) segs.push({ x0: r.x, x1: r.x + r.w, y: r.y + r.h / 2 });
+    else if (!filled) rects.push(r);
   };
+  const line = (a, b) => {
+    const [[x1, y1], [x2, y2]] = T([a, b]);
+    if (Math.abs(y1 - y2) < 0.6 && Math.abs(x2 - x1) >= 3 && Math.abs(x2 - x1) <= 400) segs.push({ x0: Math.min(x1, x2), x1: Math.max(x1, x2), y: (y1 + y2) / 2 });
+    else if (Math.abs(x1 - x2) < 0.6 && Math.abs(y2 - y1) >= 3) vsegs.push({ x: (x1 + x2) / 2, y0: Math.min(y1, y2), y1: Math.max(y1, y2) });
+  };
+  const STROKE = [FOPS.stroke, FOPS.closeStroke, FOPS.fillStroke, FOPS.eoFillStroke, FOPS.closeFillStroke, FOPS.closeEOFillStroke], FILL = [FOPS.fill, FOPS.eoFill];
   for (let i = 0; i < ol.fnArray.length; i++) {
     const fn = ol.fnArray[i], args = ol.argsArray[i];
     if (fn === FOPS.save) st.push(ctm);
@@ -552,20 +683,50 @@ async function vectorBoxes(page, vp) {
     else if (fn === FOPS.paintFormXObjectBegin) { st.push(ctm); if (args[0]) ctm = mul(ctm, args[0]); }
     else if (fn === FOPS.paintFormXObjectEnd) ctm = st.pop() || ctm;
     else if (fn === FOPS.constructPath) {
-      let next = ol.fnArray[i + 1];
-      if (![FOPS.stroke, FOPS.closeStroke, FOPS.fillStroke, FOPS.eoFillStroke, FOPS.closeFillStroke, FOPS.closeEOFillStroke].includes(next)) continue;
+      const next = ol.fnArray[i + 1], stroke = STROKE.includes(next), fill = FILL.includes(next);
+      if (!stroke && !fill) continue;
       const [ops, c] = args; let j = 0, poly = [];
-      const endPoly = () => { if (poly.length >= 4 && poly.length <= 5) { const xs = new Set(poly.map(q => Math.round(q[0] * 4))), ys = new Set(poly.map(q => Math.round(q[1] * 4))); if (xs.size <= 2 && ys.size <= 2) push(poly); } poly = []; };
+      const endPoly = () => {
+        if (poly.length >= 4 && poly.length <= 5) { const xs = new Set(poly.map(q => Math.round(q[0] * 4))), ys = new Set(poly.map(q => Math.round(q[1] * 4))); if (xs.size <= 2 && ys.size <= 2) { rect(poly, !stroke); poly = []; return; } }
+        if (stroke && poly.length >= 2 && poly.length <= 3) for (let k = 1; k < poly.length; k++) line(poly[k - 1], poly[k]);
+        poly = [];
+      };
       for (const op of ops) {
-        if (op === FOPS.rectangle) { endPoly(); const [x, y, w, h] = c.slice(j, j + 4); j += 4; push([[x, y], [x + w, y], [x + w, y + h], [x, y + h]]); }
+        if (op === FOPS.rectangle) { endPoly(); const [x, y, w, h] = c.slice(j, j + 4); j += 4; rect([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], !stroke); }
         else if (op === FOPS.moveTo) { endPoly(); poly.push(c.slice(j, j + 2)); j += 2; }
         else if (op === FOPS.lineTo) { poly.push(c.slice(j, j + 2)); j += 2; }
         else if (op === FOPS.curveTo) { j += 6; poly = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]; }
         else if (op === FOPS.curveTo2 || op === FOPS.curveTo3) { j += 4; poly = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]; }
-        else if (op === FOPS.closePath) { /* polygon closes back to its start */ }
       }
       endPoly();
     }
+  }
+  const boxes = rects.filter(({ w, h }) => w >= 5 && h >= 5 && w <= 17 && h <= 17 && Math.abs(w - h) <= Math.max(1.2, 0.15 * Math.max(w, h)));
+  return { boxes, combs: combRows(rects, vsegs), segs };
+}
+// a row of touching little boxes (or one box split by ticks) is one comb field, not many checkboxes
+function combRows(rects, vsegs) {
+  const out = [], small = [];
+  for (const r of rects) if (r.w >= 4 && r.w <= 28 && r.h >= 6 && r.h <= 28 && !small.some(o => Math.abs(o.x - r.x) < 0.8 && Math.abs(o.y - r.y) < 0.8 && Math.abs(o.w - r.w) < 0.8)) small.push(r);
+  small.sort((a, b) => a.y - b.y || a.x - b.x);
+  const used = new Set();
+  for (const r of small) {
+    if (used.has(r)) continue;
+    const row = small.filter(o => !used.has(o) && Math.abs(o.y - r.y) <= 1.5 && Math.abs(o.h - r.h) <= 1.5).sort((a, b) => a.x - b.x);
+    let chain = [];
+    const done = () => { if (chain.length >= 5) { chain.forEach(o => used.add(o)); out.push({ x: chain[0].x, y: Math.min(...chain.map(o => o.y)), w: chain[chain.length - 1].x + chain[chain.length - 1].w - chain[0].x, h: Math.max(...chain.map(o => o.h)), cells: chain.map(o => [o.x, o.x + o.w]) }); } chain = []; };
+    for (const o of row) { const l = chain[chain.length - 1]; if (l && !(o.x - (l.x + l.w) >= -1.5 && o.x - (l.x + l.w) <= Math.max(6, 0.6 * l.w) && Math.abs(o.w - l.w) <= Math.max(1.5, 0.3 * l.w))) done(); chain.push(o); }
+    done();
+  }
+  // one long box of text-line height: empty input frame, or comb if ticks divide it
+  for (const r of rects) {
+    if (r.h < 8 || r.h > 28 || r.w < Math.max(40, 3 * r.h) || r.w > 520) continue;
+    if (small.some(o => o.x >= r.x - 1 && o.x + o.w <= r.x + r.w + 1 && o.y >= r.y - 1 && o.y + o.h <= r.y + r.h + 1)) continue;
+    if (out.some(o => Math.abs(o.x - r.x) < 2 && Math.abs(o.y - r.y) < 2)) continue;
+    const ticks = [...new Set(vsegs.filter(v => v.x > r.x + 2 && v.x < r.x + r.w - 2 && v.y1 > r.y + r.h * 0.4 && v.y0 < r.y + r.h * 0.6 && v.y1 - v.y0 >= r.h * 0.3).map(v => Math.round(v.x * 2) / 2))].sort((a, b) => a - b);
+    let cells = null;
+    if (ticks.length >= 3) { const xs = [r.x, ...ticks, r.x + r.w]; cells = xs.slice(1).map((x, k) => [xs[k], x]).filter(([a, b]) => b - a > 3); }
+    out.push({ x: r.x, y: r.y, w: r.w, h: r.h, cells });
   }
   return out;
 }
@@ -609,12 +770,15 @@ async function detectPage(p, keep) {
   const page = await sources[p.src].doc.getPage(p.idx + 1), vp = page.getViewport({ scale: 1 });
   const acro = await acroFields(page, vp, p);
   if (acro.length) return acro;
-  const texts = await textLineFields(page, vp, p);
-  const vec = await vectorBoxes(page, vp), ras = await rasterBoxes(page);
+  const vec = await vectorShapes(page, vp), ras = await rasterBoxes(page);
+  const inside = (b, c) => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return cx > c.x - 1 && cx < c.x + c.w + 1 && cy > c.y - 1 && cy < c.y + c.h + 1; };
   const boxes = [];
-  const add = (b, inkR) => { if (boxes.some(o => Math.abs(o.x + o.w / 2 - b.x - b.w / 2) < 3 && Math.abs(o.y + o.h / 2 - b.y - b.h / 2) < 3)) return; boxes.push({ ...b, inkR }); };
-  for (const b of vec) { const S = ras.S; add(b, inkInside(ras.ink, ras.W, Math.round(b.x * S), Math.round(b.y * S), Math.round((b.x + b.w) * S), Math.round((b.y + b.h) * S))); }
+  const add = (b, inkR) => { if (vec.combs.some(c => inside(b, c))) return; if (boxes.some(o => Math.abs(o.x + o.w / 2 - b.x - b.w / 2) < 3 && Math.abs(o.y + o.h / 2 - b.y - b.h / 2) < 3)) return; boxes.push({ ...b, inkR }); };
+  for (const b of vec.boxes) { const S = ras.S; add(b, inkInside(ras.ink, ras.W, Math.round(b.x * S), Math.round(b.y * S), Math.round((b.x + b.w) * S), Math.round((b.y + b.h) * S))); }
   for (const b of ras.boxes) add(b, b.ink);
+  // drawn blank lines, minus the edges of boxes (Word draws checkboxes as four hairline fills)
+  const segs = vec.segs.filter(s => ![...boxes, ...vec.combs].some(b => s.x0 > b.x - 2 && s.x1 < b.x + b.w + 2 && s.y > b.y - 2 && s.y < b.y + b.h + 2));
+  const texts = await textLineFields(page, vp, p, { segs, combs: vec.combs });
   const checks = boxes.map(b => ({ id: uid(), key: p.key, kind: "check", src: "auto", x: b.x, y: b.y, w: b.w, h: b.h, value: false, printed: b.inkR > 0.12 }));
   return [...texts, ...checks];
 }
@@ -653,16 +817,19 @@ function drawField(f, append) {
   const p = pages.find(x => x.key === f.key); if (!p?.el) return;
   let el = p.el.querySelector(`.fld[data-id="${f.id}"]`);
   if (!el) {
-    el = document.createElement("div"); el.className = "fld " + f.kind + (f.date ? " date" : "") + (f.src !== "acro" ? " edit" : "") + (f.printed ? " printed" : ""); el.dataset.id = f.id;
+    el = document.createElement("div"); el.className = "fld " + f.kind + (f.date ? " date" : "") + (f.date || f.cells || f.slotGroups ? " ov" : "") + (f.iban ? " iban" : "") + (f.src !== "acro" ? " edit" : "") + (f.printed ? " printed" : ""); el.dataset.id = f.id;
     let inp;
     if (f.kind === "text") {
       inp = document.createElement(f.multi ? "textarea" : "input"); inp.className = "fi"; if (!f.multi) inp.type = "text";
       inp.spellcheck = false; inp.autocomplete = "off"; inp.value = f.value; inp.disabled = f.ro; if (f.maxLen) inp.maxLength = f.maxLen;
-      inp.setAttribute("aria-label", f.name || (f.date ? "Date (DD/MM/YYYY)" : "Form field"));
-      if (f.date) { inp.placeholder = "DD/MM/YYYY"; inp.inputMode = "numeric"; inp.maxLength = 10; const dp = document.createElement("div"); dp.className = "dp"; dp.innerHTML = "<span></span><span></span><span></span>"; el.append(dp); }
+      inp.setAttribute("aria-label", f.name || (f.date ? "Date (DD/MM/YYYY)" : f.iban ? "Bank account (IBAN)" + (f.prefix ? ", after the printed " + f.prefix : "") : "Form field"));
+      if (f.date) { inp.placeholder = "DD/MM/YYYY"; inp.inputMode = "numeric"; inp.maxLength = 10; const dp = document.createElement("div"); dp.className = "dp"; el.append(dp); }
+      else if (f.cells || f.slotGroups) { const dp = document.createElement("div"); dp.className = "dp"; el.append(dp); }
+      if (f.iban) { inp.placeholder = f.prefix ? "68 5390 0754 7034" : "BE68 5390 0754 7034"; inp.title = f.prefix ? `Bank account: “${f.prefix}” is already printed, type the rest` : "Bank account (IBAN)"; }
       inp.addEventListener("input", () => {
         let v = inp.value;
         if (f.date) { const nv = fmtDate(v, f.value); if (nv !== v) { inp.value = nv; inp.setSelectionRange(nv.length, nv.length); } v = nv; }
+        else if (f.iban) { const atEnd = inp.selectionStart === v.length, nv = atEnd ? fmtIban(v, f) : v.toUpperCase(); if (nv !== v) { const s = inp.selectionStart; inp.value = nv; const c = atEnd ? nv.length : s; inp.setSelectionRange(c, c); } v = nv; }
         if ($("caps").checked && (f.caps || p.capsHint) && v !== v.toUpperCase()) { const s = inp.selectionStart, e = inp.selectionEnd; v = v.toLocaleUpperCase("nl-BE"); inp.value = v; inp.setSelectionRange(s, e); }
         f.value = v; markDirty(); styleText(f, inp);
         if (f.name) for (const o of fields) if (o !== f && o.name === f.name && o.kind === "text") { o.value = v; const oi = document.querySelector(`.fld[data-id="${o.id}"] .fi`); if (oi) { oi.value = v; styleText(o, oi); } }
@@ -725,11 +892,51 @@ function dateOk(v) {
 // the three gaps around the printed slashes, in field coordinates
 function dateGaps(f) { const s = f.slashes, pad = f.fs * 0.3; return [[1, s[0] - pad], [s[0] + pad, s[1] - pad], [s[1] + pad, f.w - 1]]; }
 function dateParts(f) { const p = (f.value || "").split("/"); return f.slashes && p.length === 3 && p.every(x => /^\d*$/.test(x)) ? p : null; }
-function styleText(f, inp) {
+// Bank account numbers: capitals in groups of four; a printed "BE" is not typed again
+function fmtIban(v, f) {
+  let s = v.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (f.prefix && s.startsWith(f.prefix) && s.length > f.prefix.length) s = s.slice(f.prefix.length);
+  if (f.cells) s = s.slice(0, f.cells.length);
+  const g = f.prefix ? [s.slice(0, 2), ...(s.slice(2).match(/.{1,4}/g) || [])] : s.match(/.{1,4}/g) || [];
+  return g.filter(Boolean).join(" ");
+}
+function ibanOk(f) {
+  const s = ((f.prefix || "") + (f.value || "")).toUpperCase().replace(/\s/g, "");
+  if (!/^[A-Z]{2}/.test(s)) return true;
+  if (/[^A-Z0-9]/.test(s)) return false;
+  if (s.startsWith("BE")) { if (s.length > 16) return false; if (s.length < 16) return true; }
+  else if (s.length < 15) return true;
+  const r = (s.slice(4) + s.slice(0, 4)).replace(/[A-Z]/g, c => c.charCodeAt(0) - 55);
+  let m = 0; for (const d of r) m = (m * 10 + +d) % 97;
+  return m === 1;
+}
+// characters drawn one per box / blank (comb rows, "— — / — — / — — — —" dates) or per gap between printed slashes
+function overlay(f) {
+  if (!f.value) return null;
   if (f.date) {
-    const el = inp.parentElement; el.classList.toggle("bad", !dateOk(f.value)); el.classList.toggle("hasv", !!f.value && !!dateParts(f));
-    const dp = el.querySelector(".dp"), parts = dateParts(f);
-    if (dp && parts) { const G = dateGaps(f); dp.querySelectorAll("span").forEach((sp, i) => { sp.textContent = parts[i]; sp.style.left = (G[i][0] + G[i][1]) / 2 * zoom + "px"; sp.style.fontSize = f.fs * zoom + "px"; }); }
+    const parts = dateParts(f); if (!parts) return null;
+    if (f.groups) { const o = []; parts.forEach((t, i) => [...t].slice(0, f.groups[i].length).forEach((ch, k) => o.push({ t: ch, cx: f.cells[f.groups[i][k]], room: f.cellW }))); return o; }
+    const G = dateGaps(f); return parts.map((t, i) => ({ t, cx: (G[i][0] + G[i][1]) / 2, room: G[i][1] - G[i][0] })).filter(o => o.t);
+  }
+  if (f.cells) return [...f.value.replace(/\s/g, "")].slice(0, f.cells.length).map((t, i) => ({ t, cx: f.cells[i], room: f.cellW }));
+  if (f.slotGroups) {
+    // typed groups centred on the printed groups, only when they fit there
+    const vg = f.value.trim().split(/\s+/), G = f.slotGroups; if (vg.length > G.length) return null;
+    mctx.font = `${f.fs}px Helvetica, Arial, sans-serif`;
+    const gap = i => i + 1 < G.length ? Math.min(i > 0 ? G[i][0] - G[i - 1][1] : 1e9, G[i + 1][0] - G[i][1]) : i > 0 ? G[i][0] - G[i - 1][1] : f.w - G[i][1];
+    const o = vg.map((t, i) => ({ t, cx: (G[i][0] + G[i][1]) / 2, room: G[i][1] - G[i][0] + gap(i) - f.fs * 0.4 }));
+    return o.every(q => mctx.measureText(q.t).width * 0.72 <= q.room) ? o : null;
+  }
+  return null;
+}
+function styleText(f, inp) {
+  const el = inp.parentElement;
+  if (f.date) el.classList.toggle("bad", !dateOk(f.value));
+  else if (f.iban) el.classList.toggle("bad", !ibanOk(f) || (!!f.cells && f.value.replace(/\s/g, "").length > f.cells.length));
+  else if (f.cells) el.classList.toggle("bad", f.value.replace(/\s/g, "").length > f.cells.length);
+  if (f.date || f.cells || f.slotGroups) {
+    const o = overlay(f), dp = el.querySelector(".dp"); el.classList.toggle("hasv", !!o?.length);
+    if (dp) { if (!o) dp.replaceChildren(); else { mctx.font = `${f.fs}px Helvetica, Arial, sans-serif`; dp.replaceChildren(...o.map(q => { const sp = document.createElement("span"), w = mctx.measureText(q.t).width; sp.textContent = q.t; sp.style.left = q.cx * zoom + "px"; sp.style.fontSize = (q.room && w > q.room - 0.5 && q.room > 2 ? f.fs * (q.room - 0.5) / w : f.fs) * zoom + "px"; return sp; })); } }
   } inp.style.fontSize = (f.kind === "text" ? fitFs(f) : f.fs) * zoom + "px"; inp.style.padding = f.multi ? `${zoom}px ${2 * zoom}px` : `0 ${1.5 * zoom}px`; }
 function insertOrdered(p, f, el) {
   const list = ordered(fields.filter(x => x.key === p.key)), i = list.indexOf(f), next = list.slice(i + 1).map(x => p.el.querySelector(`.fld[data-id="${x.id}"]`)).find(Boolean);
@@ -799,11 +1006,11 @@ async function drawFlatFields(out, cp, vp, list, rot, font) {
       const P = (u, v) => vp.convertToPdfPoint(f.x + u * f.w, f.y + v * f.h), th = Math.max(0.7, Math.min(f.w, f.h) * 0.12);
       const segs = ckStyle === "v" ? [[[0.18, 0.55], [0.42, 0.78]], [[0.42, 0.78], [0.84, 0.22]]] : [[[0.22, 0.22], [0.78, 0.78]], [[0.78, 0.22], [0.22, 0.78]]];
       for (const [a, b] of segs) { const [x1, y1] = P(...a), [x2, y2] = P(...b); cp.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: th, color: ink, lineCap: PDFLib.LineCapStyle.Round }); }
-    } else if (f.kind === "text" && f.value && f.date && dateParts(f)) {
-      // DD, MM and YYYY centred in the gaps between the printed slashes
-      const G = dateGaps(f), by = f.y + f.h / 2 + 0.35 * f.fs;
-      dateParts(f).forEach((t, i) => { if (!t) return; let fs = f.fs, w = font.widthOfTextAtSize(t, fs); const room = G[i][1] - G[i][0]; if (w > room && room > 2) { fs *= room / w; w = room; }
-        const [x, y] = vp.convertToPdfPoint(f.x + (G[i][0] + G[i][1]) / 2 - w / 2, by); cp.drawText(t, { x, y, size: fs, font, color: ink, rotate: degrees(rot) }); });
+    } else if (f.kind === "text" && f.value && (f.date || f.cells || f.slotGroups) && overlay(f)) {
+      // one character per printed box / blank, or DD, MM and YYYY centred between the printed slashes
+      const by = f.y + f.h / 2 + 0.35 * f.fs;
+      for (const o of overlay(f)) { let fs = f.fs, w = font.widthOfTextAtSize(o.t, fs); if (o.room && w > o.room - 0.5 && o.room > 2) { fs *= (o.room - 0.5) / w; w = o.room - 0.5; }
+        const [x, y] = vp.convertToPdfPoint(f.x + o.cx - w / 2, by); cp.drawText(o.t, { x, y, size: fs, font, color: ink, rotate: degrees(rot) }); }
     } else if (f.kind === "text" && f.value) {
       const lines = f.multi ? f.value.split("\n") : [f.value.replace(/\n/g, " ")], fs = fitFs(f);
       for (let li = 0; li < lines.length; li++) {
