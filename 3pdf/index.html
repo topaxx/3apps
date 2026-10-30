@@ -512,12 +512,18 @@ async function textLineFields(page, vp, p, shp = {}) {
   }
   // boxed fields: comb rows ("BE |_|_|_|...") and empty one-line frames
   for (const c of shp.combs || []) {
-    const L = lines.find(L => L.y > c.y + c.h * 0.3 && L.y < c.y + c.h + 3), lab = L ? labelLeft(L, c.x) : { iban: false, prefix: "" };
-    let cells = c.cells, prefix = lab.prefix;
+    // printed characters inside the row's height (the label beside it can sit on another text line than "B" "E")
+    const inRow = q => !/\s/.test(q.c) && !q.vec && q.y - q.fs * 0.35 > c.y - 1 && q.y - q.fs * 0.35 < c.y + c.h + 1;
+    const G = glyphs.filter(q => inRow(q) && q.x1 > c.x - 1 && q.x0 < c.x + c.w + 1);
+    const Ls = lines.filter(L => L.y > c.y + c.h * 0.2 && L.y < c.y + c.h + 3), labs = Ls.map(L => labelLeft(L, c.x));
+    const lab = { iban: labs.some(l => l.iban), prefix: "" };
+    let cells = c.cells, prefix = "";
+    const hit = ([a, b]) => G.filter(q => Math.min(q.x1, b) - Math.max(q.x0, a) > 1);
     // leading boxes with printed letters (e.g. "B" "E") are not part of the field
-    while (cells && cells.length && L && L.g.some(q => !/\s/.test(q.c) && !q.vec && (q.x0 + q.x1) / 2 > cells[0][0] && (q.x0 + q.x1) / 2 < cells[0][1])) { prefix += L.g.filter(q => (q.x0 + q.x1) / 2 > cells[0][0] && (q.x0 + q.x1) / 2 < cells[0][1]).map(q => q.c).join("").trim(); cells = cells.slice(1); }
-    if (cells && L && cells.filter(([a, b]) => L.g.some(q => !/\s/.test(q.c) && !q.vec && (q.x0 + q.x1) / 2 > a && (q.x0 + q.x1) / 2 < b)).length > cells.length / 3) continue; // a filled-in table, not an input
-    if (!cells) { if (glyphs.some(q => !/\s/.test(q.c) && (q.x0 + q.x1) / 2 > c.x && (q.x0 + q.x1) / 2 < c.x + c.w && q.y > c.y && q.y - q.fs * 0.5 < c.y + c.h)) continue; }
+    while (cells && cells.length && hit(cells[0]).length) { prefix += hit(cells[0]).map(q => q.c).join(""); cells = cells.slice(1); }
+    if (!prefix) prefix = (labs.find(l => l.prefix) || { prefix: "" }).prefix;
+    if (cells && cells.filter(cl => hit(cl).length).length > cells.length / 3) continue; // a filled-in table, not an input
+    if (!cells) { if (G.some(q => (q.x0 + q.x1) / 2 > c.x && (q.x0 + q.x1) / 2 < c.x + c.w)) continue; }
     const x = cells ? cells[0][0] : c.x, w = cells ? cells[cells.length - 1][1] - x : c.w;
     if (cells && cells.length < 2) continue;
     const cellW = cells ? Math.min(...cells.map(([a, b]) => b - a)) : 0;
@@ -823,9 +829,9 @@ function drawField(f, append) {
       inp = document.createElement(f.multi ? "textarea" : "input"); inp.className = "fi"; if (!f.multi) inp.type = "text";
       inp.spellcheck = false; inp.autocomplete = "off"; inp.value = f.value; inp.disabled = f.ro; if (f.maxLen) inp.maxLength = f.maxLen;
       inp.setAttribute("aria-label", f.name || (f.date ? "Date (DD/MM/YYYY)" : f.iban ? "Bank account (IBAN)" + (f.prefix ? ", after the printed " + f.prefix : "") : "Form field"));
-      if (f.date) { inp.placeholder = "DD/MM/YYYY"; inp.inputMode = "numeric"; inp.maxLength = 10; const dp = document.createElement("div"); dp.className = "dp"; el.append(dp); }
+      if (f.date) { inp.title = "Date (DD/MM/YYYY)"; inp.inputMode = "numeric"; inp.maxLength = 10; const dp = document.createElement("div"); dp.className = "dp"; el.append(dp); }
       else if (f.cells || f.slotGroups) { const dp = document.createElement("div"); dp.className = "dp"; el.append(dp); }
-      if (f.iban) { inp.placeholder = f.prefix ? "68 5390 0754 7034" : "BE68 5390 0754 7034"; inp.title = f.prefix ? `Bank account: “${f.prefix}” is already printed, type the rest` : "Bank account (IBAN)"; }
+      if (f.iban) { inp.title = f.prefix ? `Bank account: “${f.prefix}” is already printed, type the rest` : "Bank account (IBAN)"; }
       inp.addEventListener("input", () => {
         let v = inp.value;
         if (f.date) { const nv = fmtDate(v, f.value); if (nv !== v) { inp.value = nv; inp.setSelectionRange(nv.length, nv.length); } v = nv; }
